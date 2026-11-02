@@ -1,0 +1,101 @@
+export const CALISTHENICS = Object.freeze([
+  {
+    id: "push-up",
+    name: "Flexiones",
+    kind: "reps",
+    view: "Cámara de lado, a la altura del suelo",
+    requires: ["shoulder", "elbow", "wrist", "hip", "ankle"],
+    measures: {
+      elbow: { type: "angle", points: ["shoulder", "elbow", "wrist"], label: "Codo" },
+      body: { type: "angle", points: ["shoulder", "hip", "ankle"], label: "Cuerpo" },
+      incline: { type: "incline", points: ["shoulder", "ankle"] },
+    },
+    gate: { incline: { lt: 45 } },
+    gateText: "Ponte en plancha de lado a la cámara",
+    phases: [
+      { id: "top", label: "Arriba", when: { elbow: { gt: 145 } } },
+      { id: "bottom", label: "Abajo", when: { elbow: { lt: 100 } } },
+    ],
+    rep: ["top", "bottom", "top"],
+    cues: [
+      { id: "hips", text: "Cuerpo recto: no dejes caer la cadera", when: { body: { lt: 150 } } },
+    ],
+    checks: [
+      { id: "depth", text: "Baja hasta 90° de codo", measure: "elbow", stat: "min", lt: 95 },
+      { id: "lockout", text: "Estira los brazos arriba", measure: "elbow", stat: "max", gt: 150 },
+      { id: "line", text: "Mantén el cuerpo recto", measure: "body", stat: "min", gt: 155 },
+    ],
+    demo: { rig: "pushup", periodMs: 2400, from: { elbow: 172, hipLift: 0 }, to: { elbow: 78, hipLift: -0.01 } },
+  },
+  {
+    id: "squat",
+    name: "Sentadillas",
+    kind: "reps",
+    view: "Cámara de frente o de lado, cuerpo entero",
+    requires: ["shoulder", "hip", "knee", "ankle"],
+    measures: {
+      knee: { type: "angle", points: ["hip", "knee", "ankle"], label: "Rodilla" },
+      hip: { type: "angle", points: ["shoulder", "hip", "knee"], label: "Cadera" },
+    },
+    phases: [
+      { id: "top", label: "Arriba", when: { knee: { gt: 145 } } },
+      { id: "bottom", label: "Abajo", when: { knee: { lt: 110 } } },
+    ],
+    rep: ["top", "bottom", "top"],
+    cues: [
+      { id: "chest", text: "Pecho arriba", phase: "bottom", when: { hip: { lt: 50 } } },
+    ],
+    checks: [
+      { id: "depth", text: "Baja hasta muslos paralelos", measure: "knee", stat: "min", lt: 100 },
+      { id: "lockout", text: "Termina de pie con rodillas estiradas", measure: "knee", stat: "max", gt: 150 },
+      { id: "chest", text: "Pecho arriba al bajar", measure: "hip", stat: "min", gt: 50 },
+    ],
+    demo: { rig: "standing", periodMs: 2600, from: { knee: 178, hip: 176, shoulder: 15, elbow: 170 }, to: { knee: 82, hip: 80, shoulder: 85, elbow: 172 } },
+  },
+  {
+    id: "pull-up",
+    name: "Dominadas",
+    kind: "reps",
+    view: "Cámara de frente o de lado, con la barra a la vista",
+    requires: ["nose", "shoulder", "elbow", "wrist"],
+    measures: {
+      elbow: { type: "angle", points: ["shoulder", "elbow", "wrist"], label: "Codo" },
+      chin: { type: "offset", points: ["nose", "wrist"] },
+      grip: { type: "offset", points: ["wrist", "shoulder"] },
+    },
+    gate: { grip: { gt: 0.2 } },
+    gateText: "Agárrate a la barra con las manos sobre los hombros",
+    phases: [
+      { id: "bottom", label: "Colgado", when: { elbow: { gt: 145 } } },
+      { id: "top", label: "Arriba", when: { elbow: { lt: 80 } } },
+    ],
+    rep: ["bottom", "top", "bottom"],
+    cues: [],
+    checks: [
+      { id: "chin", text: "Sube la barbilla sobre la barra", measure: "chin", stat: "max", gt: 0 },
+      { id: "hang", text: "Baja hasta estirar los brazos", measure: "elbow", stat: "max", gt: 150 },
+    ],
+    demo: { rig: "hanging", periodMs: 2800, from: { elbow: 172 }, to: { elbow: 34 } },
+  },
+  {
+    id: "plank",
+    name: "Plancha",
+    kind: "hold",
+    view: "Cámara de lado, a la altura del suelo",
+    requires: ["shoulder", "hip", "ankle"],
+    measures: {
+      body: { type: "angle", points: ["shoulder", "hip", "ankle"], label: "Cuerpo" },
+      hipLine: { type: "lineOffset", points: ["hip", "shoulder", "ankle"] },
+      incline: { type: "incline", points: ["shoulder", "ankle"] },
+    },
+    gate: { incline: { lt: 35 } },
+    gateText: "Ponte en plancha de lado a la cámara",
+    hold: { when: { body: { gt: 160 } } },
+    cues: [
+      { id: "sag", text: "Sube la cadera", when: { hipLine: { lt: -0.04 } } },
+      { id: "pike", text: "Baja la cadera", when: { hipLine: { gt: 0.06 } } },
+    ],
+    checks: [],
+    demo: { rig: "plank", periodMs: 9000, profile: "dip", from: { hipLift: 0 }, to: { hipLift: -0.16 } },
+  },
+]);
