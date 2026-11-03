@@ -1,14 +1,13 @@
-import { createPoseEngine, CONNECTIONS, LANDMARK, SOURCE, STATUS, KIND, PHASE_LOST, FACING, MEASURE } from "../engine/v1/index.js?v=0.1.0";
+import { createPoseEngine, CONNECTIONS, LANDMARK, SOURCE, STATUS, KIND, PHASE_LOST, FACING, MEASURE } from "../engine/v1/index.js?v=0.1.1";
 import {
-  APP_ID, APP_VERSION, REPO_URL, STATS_KEY, STAT, STATS, FEEDBACK_MS, STATUS_EVERY_MS, LABEL_FONT_PX, JOINT_RADIUS_PX,
-  BONE_WIDTH_PX, MIN_JOINT_VISIBILITY, MAX_DPR, SECONDS_PER_MINUTE, COLOR, TEXT, FASE_PUNTOS, PUNTO_FASE,
+  APP_ID, APP_VERSION, CAMERA_KEY, STATS_KEY, STAT, STATS, FEEDBACK_MS, LABEL_FONT_PX, JOINT_RADIUS_PX,
+  BONE_WIDTH_PX, MIN_JOINT_VISIBILITY, MAX_DPR, SECONDS_PER_MINUTE, COLOR, TEXT,
 } from "./config.js";
-import { PROYECTO, metaProyecto, metaUpdate, metaRead, crearEscritor, demoOn } from "./meta.js";
+import { metaUpdate, metaRead, crearEscritor, demoOn } from "./meta.js";
 
-const FASES_NOMBRE = ["Idea", "Definición", "Diseño", "Construcción", "Validación", "Lanzamiento y mantenimiento"];
-const ESTADOS_NOMBRE = ["Pendiente", "En curso", "Bloqueada", "En revisión", "Completada"];
-const TOTAL_FASES = 6;
 const LEFT_PREFIX = "left_";
+const MIN_VIDEO_INPUTS = 2;
+const VIDEO_INPUT = "videoinput";
 
 const $ = (id) => document.getElementById(id);
 const video = $("video");
@@ -17,16 +16,34 @@ const ctx = canvas.getContext("2d");
 const stage = $("stage");
 const ui = {
   picker: $("picker"), counter: document.querySelector(".counter"), counterLabel: $("counter-label"), counterValue: $("counter-value"),
-  counterSub: $("counter-sub"), phase: $("phase"), cue: $("cue"), status: $("status"), msg: $("stage-msg"), msgText: $("stage-text"),
+  counterSub: $("counter-sub"), phase: $("phase"), cue: $("cue"), msg: $("stage-msg"), msgText: $("stage-text"),
   msgHint: $("stage-hint"), msgDemo: $("btn-msg-demo"), camera: $("btn-camera"), flip: $("btn-flip"), demo: $("btn-demo"), reset: $("btn-reset"),
 };
 
-const engine = createPoseEngine({ video });
+function loadFacing() {
+  try {
+    const saved = localStorage.getItem(CAMERA_KEY);
+    if (saved === FACING.USER || saved === FACING.ENVIRONMENT) return saved;
+  } catch (e) {
+    return FACING.USER;
+  }
+  return FACING.USER;
+}
+
+function saveFacing(mode) {
+  try {
+    localStorage.setItem(CAMERA_KEY, mode);
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+const engine = createPoseEngine({ video, facingMode: loadFacing() });
 const leftJoints = new Set();
 let running = false;
 let source = null;
 let feedback = null;
-let lastStatusAt = 0;
 let lastFrame = null;
 let busy = false;
 
@@ -119,19 +136,31 @@ function renderCue(cue) {
   const now = performance.now();
   let show = cue;
   if (!show && feedback && now - feedback.at < FEEDBACK_MS) show = { text: feedback.text, level: feedback.level };
-  ui.cue.textContent = show ? show.text : TEXT.noCue;
-  ui.cue.dataset.level = show ? show.level || "warn" : "";
+  ui.cue.textContent = show && show.text ? show.text : "";
+  ui.cue.dataset.level = show && show.text ? show.level || "warn" : "";
 }
 
-function renderStatus(frame) {
-  const now = performance.now();
-  if (now - lastStatusAt < STATUS_EVERY_MS) return;
-  lastStatusAt = now;
-  const parts = [frame.source === SOURCE.SYNTHETIC ? TEXT.demoSource : TEXT.modelSource];
-  if (frame.delegate) parts.push(frame.delegate);
-  parts.push(Math.round(frame.fps) + " fps");
-  if (frame.source === SOURCE.CAMERA) parts.push(engine.getState().facingMode === FACING.USER ? "frontal" : "trasera");
-  ui.status.textContent = parts.join(" · ");
+function renderCameraChrome() {
+  const mode = engine.getState().facingMode;
+  ui.flip.setAttribute("aria-pressed", String(mode === FACING.ENVIRONMENT));
+  video.classList.toggle("mirrored", mode === FACING.USER && source === SOURCE.CAMERA);
+}
+
+async function refreshCameras() {
+  let hide = false;
+  try {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) hide = true;
+    else {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const videos = devices.filter((d) => d.kind === VIDEO_INPUT);
+      const known = videos.filter((d) => d.deviceId || d.label);
+      if (!videos.length) hide = true;
+      else if (known.length) hide = known.length < MIN_VIDEO_INPUTS;
+    }
+  } catch (e) {
+    hide = false;
+  }
+  ui.flip.hidden = hide;
 }
 
 function resizeCanvas() {
@@ -220,8 +249,8 @@ function setRunning(on, src) {
   ui.camera.textContent = on && src === SOURCE.CAMERA ? TEXT.stop : TEXT.start;
   ui.camera.classList.toggle("on", on && src === SOURCE.CAMERA);
   ui.demo.textContent = on && src === SOURCE.SYNTHETIC ? TEXT.stop : TEXT.demo;
-  ui.flip.disabled = !(on && src === SOURCE.CAMERA);
   document.body.dataset.source = on ? src : "";
+  renderCameraChrome();
 }
 
 async function startCamera() {
@@ -231,9 +260,9 @@ async function startCamera() {
   showMessage(TEXT.loading, engine.exercise().view);
   try {
     await engine.start({ source: SOURCE.CAMERA });
-    video.classList.toggle("mirrored", engine.getState().facingMode === FACING.USER);
     setRunning(true, SOURCE.CAMERA);
     hideMessage();
+    refreshCameras();
   } catch (e) {
     setRunning(false);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -245,7 +274,6 @@ async function startCamera() {
 
 async function startDemo() {
   feedback = null;
-  video.classList.remove("mirrored");
   await engine.start({ source: SOURCE.SYNTHETIC });
   setRunning(true, SOURCE.SYNTHETIC);
   hideMessage();
@@ -267,7 +295,6 @@ engine.on("status", (s) => {
 engine.on("frame", (frame) => {
   lastFrame = frame;
   draw(frame);
-  renderStatus(frame);
   if (frame.kind === KIND.HOLD) renderCounter(frame);
 });
 
@@ -325,7 +352,8 @@ ui.flip.addEventListener("click", async () => {
   busy = true;
   try {
     const facing = await engine.switchCamera();
-    video.classList.toggle("mirrored", facing === FACING.USER);
+    saveFacing(facing);
+    renderCameraChrome();
   } catch (e) {
     setRunning(false);
     showMessage(TEXT.errors[e.code] || TEXT.errors["camera-error"], "", true);
@@ -342,19 +370,7 @@ ui.reset.addEventListener("click", () => {
 });
 
 function buildInfo() {
-  const p = metaProyecto(PROYECTO);
-  $("proyecto-fase").textContent = p ? "Fase " + p.fase + "/" + TOTAL_FASES + " · " + FASES_NOMBRE[p.fase - 1] + " · " + ESTADOS_NOMBRE[p.fase_estado] : "";
-  $("puntos").replaceChildren(...FASE_PUNTOS.map((x) => {
-    const li = document.createElement("li");
-    li.textContent = x.texto;
-    if (x.estado === PUNTO_FASE.PENDIENTE) li.className = "pendiente";
-    return li;
-  }));
-  const link = document.createElement("a");
-  link.href = REPO_URL;
-  link.textContent = "Código";
-  link.style.color = "inherit";
-  $("info-version").replaceChildren(APP_ID + " v" + APP_VERSION + " · ", link);
+  $("info-version").textContent = "v" + APP_VERSION;
 }
 
 $("btn-info").addEventListener("click", () => $("info").showModal());
@@ -368,7 +384,6 @@ document.addEventListener("visibilitychange", () => {
 window.addEventListener("resize", resizeCanvas);
 if (window.ResizeObserver) new ResizeObserver(resizeCanvas).observe(stage);
 
-$("bar-version").textContent = "v" + APP_VERSION;
 buildPicker();
 buildInfo();
 renderCounter(engine.getState());
@@ -376,6 +391,10 @@ renderPhase(PHASE_LOST);
 resizeCanvas();
 showMessage(TEXT.idle, engine.exercise().view);
 setRunning(false);
+refreshCameras();
+if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) {
+  navigator.mediaDevices.addEventListener("devicechange", () => refreshCameras());
+}
 if (!metaRead(APP_ID)) escritorMeta.pedir();
 if (demoOn()) startDemo();
 

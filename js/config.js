@@ -1,7 +1,8 @@
 export const APP_ID = "pose-engine";
-export const APP_VERSION = "0.1.0";
+export const APP_VERSION = "0.1.1";
 export const REPO_URL = "https://github.com/juliangdeveloper/pose-engine";
 export const STATS_KEY = "pose-engine.stats";
+export const CAMERA_KEY = "pose-engine.camera";
 
 export const STAT = Object.freeze({ REPS_TOTAL: "reps_total", BEST_HOLD_S: "mejor_plancha_s" });
 export const STATS = Object.freeze([
@@ -10,7 +11,6 @@ export const STATS = Object.freeze([
 ]);
 
 export const FEEDBACK_MS = 2500;
-export const STATUS_EVERY_MS = 500;
 export const LABEL_FONT_PX = 13;
 export const JOINT_RADIUS_PX = 4;
 export const BONE_WIDTH_PX = 4;
@@ -30,17 +30,14 @@ export const COLOR = Object.freeze({
 
 export const TEXT = Object.freeze({
   idle: "Elige un ejercicio y pulsa Cámara. Sin cámara, prueba la demo.",
-  loading: "Cargando modelo…",
+  loading: "Cargando…",
   opening: "Abriendo cámara…",
-  demoSource: "Demo sintética",
-  modelSource: "MediaPipe",
   start: "Cámara",
   stop: "Parar",
   demo: "Demo",
   reps: "Reps",
   hold: "Plancha",
   best: "mejor",
-  noCue: "",
   good: "¡Bien hecha!",
   phase: Object.freeze({ lost: "Sin cuerpo", idle: "Posición", holding: "Aguantando" }),
   errors: Object.freeze({
@@ -50,8 +47,8 @@ export const TEXT = Object.freeze({
     "insecure-context": "La cámara solo funciona con HTTPS. Abre la página publicada o mira la demo.",
     "camera-unsupported": "Este navegador no permite usar la cámara. Puedes ver la demo.",
     "camera-error": "No se pudo abrir la cámara. Puedes ver la demo.",
-    "model-failed": "No se pudo cargar el modelo de pose. Revisa la conexión o mira la demo.",
-    "detect-failed": "El modelo dejó de responder. Vuelve a intentarlo o mira la demo.",
+    "model-failed": "No se pudo cargar. Revisa la conexión o mira la demo.",
+    "detect-failed": "No responde. Vuelve a intentarlo o mira la demo.",
   }),
 });
 

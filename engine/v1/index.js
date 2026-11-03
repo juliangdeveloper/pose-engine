@@ -7,7 +7,7 @@ import { createMediaPipeDetector, DELEGATE, MODEL, TASKS_VISION_VERSION } from "
 import { openCamera, closeCamera, FACING, CAMERA_ERROR, CameraError } from "./camera.js";
 import { CALISTHENICS } from "./exercises/calisthenics.js";
 
-export const ENGINE_VERSION = "0.1.0";
+export const ENGINE_VERSION = "0.1.1";
 export const SOURCE = Object.freeze({ CAMERA: "camera", VIDEO: "video", SYNTHETIC: "synthetic" });
 export const STATUS = Object.freeze({ LOADING_MODEL: "loading-model", OPENING_CAMERA: "opening-camera", RUNNING: "running", STOPPED: "stopped" });
 export const ENGINE_ERROR = Object.freeze(Object.assign({ MODEL_FAILED: "model-failed", DETECT_FAILED: "detect-failed", NO_VIDEO: "no-video", NO_EXERCISE: "no-exercise", NO_DEMO: "no-demo" }, CAMERA_ERROR));
@@ -15,6 +15,19 @@ export const DEFAULT_MESSAGES = Object.freeze({ lost: "Que se vea todo el cuerpo
 
 const FPS_SMOOTHING = 0.1;
 const MS_PER_S = 1000;
+const CAMERA_RELEASE_MS = 250;
+
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function videoDeviceId(media) {
+  if (!media || typeof media.getVideoTracks !== "function") return "";
+  const track = media.getVideoTracks()[0];
+  if (!track || typeof track.getSettings !== "function") return "";
+  const settings = track.getSettings();
+  return settings && settings.deviceId ? settings.deviceId : "";
+}
 
 export { LANDMARK, LANDMARK_COUNT, CONNECTIONS, SIDE, MEASURE, SPACE, KIND, PHASE_LOST, PHASE_IDLE, PHASE_HOLDING, DELEGATE, MODEL, FACING, TASKS_VISION_VERSION, SMOOTHING_DEFAULTS };
 export { CALISTHENICS, validateExercise, testCondition, registerRig, createSyntheticSource, createMediaPipeDetector, createOneEuroFilter, createLandmarkSmoother };
@@ -246,8 +259,27 @@ export function createPoseEngine(options) {
   }
 
   async function switchCamera() {
-    facing = facing === FACING.USER ? FACING.ENVIRONMENT : FACING.USER;
-    if (running && source === SOURCE.CAMERA) await start({ source: SOURCE.CAMERA });
+    const next = facing === FACING.USER ? FACING.ENVIRONMENT : FACING.USER;
+    if (!(running && source === SOURCE.CAMERA)) {
+      facing = next;
+      return facing;
+    }
+    const previous = facing;
+    const live = stream || (video && video.srcObject) || null;
+    const currentDeviceId = videoDeviceId(live);
+    facing = next;
+    stream = null;
+    if (video && video.pause) video.pause();
+    closeCamera(video, live);
+    if (video && video.srcObject) closeCamera(video, video.srcObject);
+    if (live) await wait(CAMERA_RELEASE_MS);
+    try {
+      stream = await openCamera(video, { facingMode: facing, width: o.width, height: o.height, currentDeviceId });
+    } catch (e) {
+      facing = previous;
+      stop(true);
+      throw fail(e instanceof CameraError ? e.code : ENGINE_ERROR.UNKNOWN, e);
+    }
     return facing;
   }
 
