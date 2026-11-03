@@ -1,6 +1,6 @@
-import { createPoseEngine, CONNECTIONS, LANDMARK, SOURCE, STATUS, KIND, PHASE_LOST, FACING, MEASURE } from "../engine/v1/index.js?v=0.1.1";
+import { createPoseEngine, CONNECTIONS, LANDMARK, SOURCE, STATUS, KIND, PHASE_LOST, FACING, LENS, MEASURE } from "../engine/v1/index.js?v=0.1.2";
 import {
-  APP_ID, APP_VERSION, CAMERA_KEY, STATS_KEY, STAT, STATS, FEEDBACK_MS, LABEL_FONT_PX, JOINT_RADIUS_PX,
+  APP_ID, APP_VERSION, CAMERA_KEY, LENS_KEY, STATS_KEY, STAT, STATS, FEEDBACK_MS, LABEL_FONT_PX, JOINT_RADIUS_PX,
   BONE_WIDTH_PX, MIN_JOINT_VISIBILITY, MAX_DPR, SECONDS_PER_MINUTE, COLOR, TEXT,
 } from "./config.js";
 import { metaUpdate, metaRead, crearEscritor, demoOn } from "./meta.js";
@@ -8,6 +8,7 @@ import { metaUpdate, metaRead, crearEscritor, demoOn } from "./meta.js";
 const LEFT_PREFIX = "left_";
 const MIN_VIDEO_INPUTS = 2;
 const VIDEO_INPUT = "videoinput";
+const ZOOM_LABEL = Object.freeze({ WIDE: "0.5×", NORMAL: "1×" });
 
 const $ = (id) => document.getElementById(id);
 const video = $("video");
@@ -17,7 +18,8 @@ const stage = $("stage");
 const ui = {
   picker: $("picker"), counter: document.querySelector(".counter"), counterLabel: $("counter-label"), counterValue: $("counter-value"),
   counterSub: $("counter-sub"), phase: $("phase"), cue: $("cue"), msg: $("stage-msg"), msgText: $("stage-text"),
-  msgHint: $("stage-hint"), msgDemo: $("btn-msg-demo"), camera: $("btn-camera"), flip: $("btn-flip"), demo: $("btn-demo"), reset: $("btn-reset"),
+  msgHint: $("stage-hint"), msgDemo: $("btn-msg-demo"), camera: $("btn-camera"), flip: $("btn-flip"), zoom: $("btn-zoom"),
+  zoomLabel: $("zoom-label"), demo: $("btn-demo"), reset: $("btn-reset"),
 };
 
 function loadFacing() {
@@ -39,7 +41,26 @@ function saveFacing(mode) {
   }
 }
 
-const engine = createPoseEngine({ video, facingMode: loadFacing() });
+function loadLens() {
+  try {
+    const saved = localStorage.getItem(LENS_KEY);
+    if (saved === LENS.WIDE || saved === LENS.NORMAL) return saved;
+  } catch (e) {
+    return LENS.NORMAL;
+  }
+  return LENS.NORMAL;
+}
+
+function saveLens(mode) {
+  try {
+    localStorage.setItem(LENS_KEY, mode);
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+const engine = createPoseEngine({ video, facingMode: loadFacing(), lens: loadLens() });
 const leftJoints = new Set();
 let running = false;
 let source = null;
@@ -140,10 +161,20 @@ function renderCue(cue) {
   ui.cue.dataset.level = show && show.text ? show.level || "warn" : "";
 }
 
+function renderZoom() {
+  const state = engine.getState();
+  const wide = state.lens === LENS.WIDE;
+  const caps = state.capabilities;
+  ui.zoom.hidden = !(source === SOURCE.CAMERA && caps && caps.canWiden);
+  ui.zoom.setAttribute("aria-pressed", String(wide));
+  ui.zoomLabel.textContent = wide ? ZOOM_LABEL.WIDE : ZOOM_LABEL.NORMAL;
+}
+
 function renderCameraChrome() {
   const mode = engine.getState().facingMode;
   ui.flip.setAttribute("aria-pressed", String(mode === FACING.ENVIRONMENT));
   video.classList.toggle("mirrored", mode === FACING.USER && source === SOURCE.CAMERA);
+  renderZoom();
 }
 
 async function refreshCameras() {
@@ -229,7 +260,7 @@ function draw(frame) {
     const spec = def.measures[k];
     if (!spec || spec.type !== MEASURE.ANGLE || !spec.label || m.at < 0 || !isFinite(m.value)) return;
     const P = px(lm[m.at]);
-    const text = spec.label + " " + Math.round(m.value) + "°";
+    const text = (m.label || spec.label) + " " + Math.round(m.value) + "°";
     const tw = ctx.measureText(text).width;
     const bx = Math.min(Math.max(P.x + 10, 4), w - tw - 16);
     const by = Math.min(Math.max(P.y - 12, 12), h - 12);
@@ -347,6 +378,22 @@ ui.demo.addEventListener("click", () => {
 
 ui.msgDemo.addEventListener("click", () => startDemo());
 
+ui.zoom.addEventListener("click", async () => {
+  if (busy) return;
+  busy = true;
+  try {
+    const next = engine.getState().lens === LENS.WIDE ? LENS.NORMAL : LENS.WIDE;
+    await engine.setLens(next);
+    saveLens(next);
+    renderZoom();
+  } catch (e) {
+    setRunning(false);
+    showMessage(TEXT.errors[e.code] || TEXT.errors["camera-error"], "", true);
+  } finally {
+    busy = false;
+  }
+});
+
 ui.flip.addEventListener("click", async () => {
   if (busy) return;
   busy = true;
@@ -384,6 +431,7 @@ document.addEventListener("visibilitychange", () => {
 window.addEventListener("resize", resizeCanvas);
 if (window.ResizeObserver) new ResizeObserver(resizeCanvas).observe(stage);
 
+$("bar-version").textContent = "v" + APP_VERSION;
 buildPicker();
 buildInfo();
 renderCounter(engine.getState());

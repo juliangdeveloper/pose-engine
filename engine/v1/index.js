@@ -4,18 +4,17 @@ import { computeMeasures, requiredVisible, createSideTracker, MEASURE, SPACE } f
 import { createExerciseRuntime, validateExercise, testCondition, KIND, PHASE_LOST, PHASE_IDLE, PHASE_HOLDING } from "./rules.js";
 import { createSyntheticSource, registerRig } from "./synthetic.js";
 import { createMediaPipeDetector, DELEGATE, MODEL, TASKS_VISION_VERSION } from "./detector.js";
-import { openCamera, closeCamera, FACING, CAMERA_ERROR, CameraError } from "./camera.js";
+import { openCamera, closeCamera, retuneLens, readCameraState, emptyCameraState, FACING, LENS, CAMERA_ERROR, CameraError, CAMERA_RELEASE_MS } from "./camera.js";
 import { CALISTHENICS } from "./exercises/calisthenics.js";
 
-export const ENGINE_VERSION = "0.1.1";
+export const ENGINE_VERSION = "0.1.2";
 export const SOURCE = Object.freeze({ CAMERA: "camera", VIDEO: "video", SYNTHETIC: "synthetic" });
 export const STATUS = Object.freeze({ LOADING_MODEL: "loading-model", OPENING_CAMERA: "opening-camera", RUNNING: "running", STOPPED: "stopped" });
 export const ENGINE_ERROR = Object.freeze(Object.assign({ MODEL_FAILED: "model-failed", DETECT_FAILED: "detect-failed", NO_VIDEO: "no-video", NO_EXERCISE: "no-exercise", NO_DEMO: "no-demo" }, CAMERA_ERROR));
-export const DEFAULT_MESSAGES = Object.freeze({ lost: "Que se vea todo el cuerpo", gate: "Colócate en la posición inicial" });
+export const DEFAULT_MESSAGES = Object.freeze({ lost: "No se ven las articulaciones", gate: "Colócate para empezar" });
 
 const FPS_SMOOTHING = 0.1;
 const MS_PER_S = 1000;
-const CAMERA_RELEASE_MS = 250;
 
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -29,7 +28,7 @@ function videoDeviceId(media) {
   return settings && settings.deviceId ? settings.deviceId : "";
 }
 
-export { LANDMARK, LANDMARK_COUNT, CONNECTIONS, SIDE, MEASURE, SPACE, KIND, PHASE_LOST, PHASE_IDLE, PHASE_HOLDING, DELEGATE, MODEL, FACING, TASKS_VISION_VERSION, SMOOTHING_DEFAULTS };
+export { LANDMARK, LANDMARK_COUNT, CONNECTIONS, SIDE, MEASURE, SPACE, KIND, PHASE_LOST, PHASE_IDLE, PHASE_HOLDING, DELEGATE, MODEL, FACING, LENS, TASKS_VISION_VERSION, SMOOTHING_DEFAULTS };
 export { CALISTHENICS, validateExercise, testCondition, registerRig, createSyntheticSource, createMediaPipeDetector, createOneEuroFilter, createLandmarkSmoother };
 
 function normalizeDefs(input) {
@@ -40,7 +39,7 @@ function normalizeDefs(input) {
 }
 
 export function createPoseEngine(options) {
-  const o = Object.assign({ exercises: CALISTHENICS, smoothing: SMOOTHING_DEFAULTS, source: SOURCE.CAMERA, facingMode: FACING.USER }, options);
+  const o = Object.assign({ exercises: CALISTHENICS, smoothing: SMOOTHING_DEFAULTS, source: SOURCE.CAMERA, facingMode: FACING.USER, lens: LENS.NORMAL }, options);
   const messages = Object.assign({}, DEFAULT_MESSAGES, o.messages);
   const listeners = {};
   const registry = new Map();
@@ -58,10 +57,31 @@ export function createPoseEngine(options) {
   let synth = null;
   let runId = 0;
   let facing = o.facingMode;
+  let lens = o.lens === LENS.WIDE ? LENS.WIDE : LENS.NORMAL;
+  let zoom = null;
+  let capabilities = emptyCameraState().capabilities;
   let fps = 0;
   let lastT = null;
   let lastVideoTime = -1;
   let lastFrame = null;
+
+  function cameraOptions(extra) {
+    const opts = { facingMode: facing, lens };
+    if (typeof o.width === "number") opts.width = o.width;
+    if (typeof o.height === "number") opts.height = o.height;
+    return Object.assign(opts, extra || {});
+  }
+
+  async function syncCamera(media) {
+    const info = await readCameraState(media, facing);
+    zoom = info.zoom;
+    capabilities = info.capabilities;
+  }
+
+  function clearCameraReadout() {
+    zoom = null;
+    capabilities = emptyCameraState().capabilities;
+  }
 
   function emit(type, data) {
     const list = listeners[type];
@@ -213,6 +233,7 @@ export function createPoseEngine(options) {
     const id = ++runId;
     source = so.source || o.source;
     if (so.facingMode) facing = so.facingMode;
+    if (so.lens === LENS.WIDE || so.lens === LENS.NORMAL) lens = so.lens;
     if (so.video) video = so.video;
     if (!current) throw fail(ENGINE_ERROR.NO_EXERCISE);
     runtime.reset();
@@ -236,11 +257,12 @@ export function createPoseEngine(options) {
     if (source === SOURCE.CAMERA) {
       emit("status", { state: STATUS.OPENING_CAMERA, source });
       try {
-        stream = await openCamera(video, { facingMode: facing, width: o.width, height: o.height });
+        stream = await openCamera(video, cameraOptions());
+        await syncCamera(stream);
       } catch (e) {
         throw fail(e instanceof CameraError ? e.code : ENGINE_ERROR.UNKNOWN, e);
       }
-      if (id !== runId) { closeCamera(video, stream); stream = null; return getState(); }
+      if (id !== runId) { closeCamera(video, stream); stream = null; clearCameraReadout(); return getState(); }
     }
     lastVideoTime = -1;
     running = true;
@@ -254,6 +276,7 @@ export function createPoseEngine(options) {
     runId++;
     running = false;
     if (stream) { closeCamera(video, stream); stream = null; }
+    clearCameraReadout();
     synth = null;
     if (was && !silent) emit("status", { state: STATUS.STOPPED, source });
   }
@@ -274,13 +297,30 @@ export function createPoseEngine(options) {
     if (video && video.srcObject) closeCamera(video, video.srcObject);
     if (live) await wait(CAMERA_RELEASE_MS);
     try {
-      stream = await openCamera(video, { facingMode: facing, width: o.width, height: o.height, currentDeviceId });
+      stream = await openCamera(video, cameraOptions({ currentDeviceId }));
+      await syncCamera(stream);
     } catch (e) {
       facing = previous;
       stop(true);
       throw fail(e instanceof CameraError ? e.code : ENGINE_ERROR.UNKNOWN, e);
     }
     return facing;
+  }
+
+  async function setLens(next) {
+    const normalized = next === LENS.WIDE ? LENS.WIDE : LENS.NORMAL;
+    const previous = lens;
+    lens = normalized;
+    if (!(running && source === SOURCE.CAMERA) || !stream || !video) return getState();
+    try {
+      stream = await retuneLens(video, stream, cameraOptions());
+      await syncCamera(stream);
+    } catch (e) {
+      lens = previous;
+      stop(true);
+      throw fail(e instanceof CameraError ? e.code : ENGINE_ERROR.UNKNOWN, e);
+    }
+    return getState();
   }
 
   function reset() {
@@ -290,7 +330,7 @@ export function createPoseEngine(options) {
 
   function getState() {
     const snap = runtime ? runtime.snapshot() : null;
-    return Object.assign({ running, source, delegate, facingMode: facing, fps }, snap);
+    return Object.assign({ running, source, delegate, facingMode: facing, fps }, snap, { zoom, lens, capabilities });
   }
 
   function feed(result, t, width, height) {
@@ -308,7 +348,7 @@ export function createPoseEngine(options) {
   if (o.exercise) setExercise(o.exercise);
 
   return {
-    on, off, start, stop, reset, feed, destroy, switchCamera, getState,
+    on, off, start, stop, reset, feed, destroy, switchCamera, setLens, getState,
     loadExercises, setExercise, exercises: listExercises,
     exercise: () => current,
     lastFrame: () => lastFrame,

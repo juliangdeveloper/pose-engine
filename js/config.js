@@ -1,8 +1,9 @@
 export const APP_ID = "pose-engine";
-export const APP_VERSION = "0.1.1";
+export const APP_VERSION = "0.1.2";
 export const REPO_URL = "https://github.com/juliangdeveloper/pose-engine";
 export const STATS_KEY = "pose-engine.stats";
 export const CAMERA_KEY = "pose-engine.camera";
+export const LENS_KEY = "pose-engine.lens";
 
 export const STAT = Object.freeze({ REPS_TOTAL: "reps_total", BEST_HOLD_S: "mejor_plancha_s" });
 export const STATS = Object.freeze([

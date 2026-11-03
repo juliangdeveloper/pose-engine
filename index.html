@@ -16,13 +16,14 @@
   <title>Pose Engine</title>
   <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="assets/icon-180.png">
-  <link rel="manifest" href="manifest.json?v=0.1.1">
-  <link rel="stylesheet" href="css/styles.css?v=0.1.1">
+  <link rel="manifest" href="manifest.json?v=0.1.2">
+  <link rel="stylesheet" href="css/styles.css?v=0.1.2">
 </head>
 <body>
   <header class="bar">
     <p class="bar-title">Pose Engine</p>
     <div class="bar-end">
+      <span class="bar-version" id="bar-version"></span>
       <button class="icon-btn" type="button" id="btn-info" aria-label="Información">i</button>
     </div>
   </header>
@@ -31,6 +32,13 @@
     <main class="stage" id="stage">
       <video id="video" playsinline muted autoplay></video>
       <canvas id="overlay" aria-hidden="true"></canvas>
+      <button class="zoom-btn" type="button" id="btn-zoom" hidden aria-label="Ampliar encuadre" aria-pressed="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <circle cx="10" cy="10" r="6.2" fill="none" stroke="currentColor" stroke-width="1.8"/>
+          <path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M7.2 10h5.6M14.7 14.7 20 20"/>
+        </svg>
+        <span id="zoom-label">1×</span>
+      </button>
       <div class="stage-msg" id="stage-msg">
         <p id="stage-text"></p>
         <p class="stage-hint" id="stage-hint"></p>
@@ -76,12 +84,12 @@
     <form method="dialog" class="sheet-body">
       <h2>Pose Engine</h2>
       <p>La cámara se procesa en tu dispositivo y no se envía ninguna imagen.</p>
-      <p>Ponte de lado para flexiones y plancha, con el cuerpo entero a la vista.</p>
+      <p>Encadra hombros y brazos para flexiones y dominadas, y cadera y rodillas para sentadillas.</p>
       <p class="tenue" id="info-version"></p>
       <button class="btn btn-primary" value="close">Cerrar</button>
     </form>
   </dialog>
 
-  <script type="module" src="js/app.js?v=0.1.1"></script>
+  <script type="module" src="js/app.js?v=0.1.2"></script>
 </body>
 </html>
