@@ -6,6 +6,25 @@ export const STAT = Object.freeze({ MIN: "min", MAX: "max" });
 
 const DEFAULTS = Object.freeze({ minFrames: 2, minRepMs: 400, cueMs: 350, graceMs: 600, lostMs: 700 });
 const MS_PER_S = 1000;
+const HYSTERESIS_DEG = 12;
+
+function relaxRule(rule) {
+  const out = {};
+  if (rule.lt !== undefined) out.lt = rule.lt + HYSTERESIS_DEG;
+  if (rule.gt !== undefined) out.gt = rule.gt - HYSTERESIS_DEG;
+  if (rule.between) out.between = [rule.between[0] - HYSTERESIS_DEG, rule.between[1] + HYSTERESIS_DEG];
+  return out;
+}
+
+function relax(cond) {
+  if (!cond) return cond;
+  if (Array.isArray(cond.all)) return { all: cond.all.map(relax) };
+  if (Array.isArray(cond.any)) return { any: cond.any.map(relax) };
+  if (cond.not) return { not: relax(cond.not) };
+  const out = {};
+  Object.keys(cond).forEach((k) => { out[k] = relaxRule(cond[k]); });
+  return out;
+}
 
 function testValue(v, rule) {
   if (!isFinite(v)) return false;
@@ -82,10 +101,15 @@ export function createExerciseRuntime(def, options) {
     return (def.labels && def.labels[id]) || id;
   }
 
+  function seenValue(stat, measure) {
+    const s = repStats[measure];
+    if (!s) return NaN;
+    return stat === STAT.MAX ? s.max : s.min;
+  }
+
   function evaluateRep(t) {
-    const checks = (def.checks || []).map((c) => {
-      const s = repStats[c.measure];
-      const v = s ? (c.stat === STAT.MAX ? s.max : s.min) : NaN;
+    const checks = (def.checks || []).filter((c) => isFinite(seenValue(c.stat, c.measure))).map((c) => {
+      const v = seenValue(c.stat, c.measure);
       return { id: c.id, text: c.text, ok: testValue(v, c), value: v };
     });
     const passed = checks.filter((c) => c.ok).length;
@@ -102,9 +126,19 @@ export function createExerciseRuntime(def, options) {
     };
   }
 
+  function pickPhase(values) {
+    const phases = def.phases || [];
+    const current = phases.find((p) => p.id === phase);
+    const strict = phases.find((p) => testCondition(p.when, values));
+    if (current && testCondition(relax(current.when), values)) {
+      if (strict && strict.id !== current.id && !testCondition(current.when, values)) return strict.id;
+      return current.id;
+    }
+    return strict ? strict.id : null;
+  }
+
   function updateReps(values, t, events) {
-    const match = def.phases.find((p) => testCondition(p.when, values));
-    const target = match ? match.id : null;
+    const target = pickPhase(values);
     if (phase === PHASE_LOST || phase === PHASE_IDLE) {
       if (target) {
         if (candidate === target) candidateFrames++;
@@ -157,7 +191,8 @@ export function createExerciseRuntime(def, options) {
   }
 
   function updateHold(values, t, events, ok) {
-    const good = ok && testCondition(def.hold.when, values);
+    const holdWhen = holdActive ? relax(def.hold.when) : def.hold.when;
+    const good = ok && testCondition(holdWhen, values);
     const dt = holdLastT === null ? 0 : Math.max(0, t - holdLastT);
     holdLastT = t;
     if (good) {

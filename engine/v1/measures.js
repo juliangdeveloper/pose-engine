@@ -6,6 +6,7 @@ export const SPACE = Object.freeze({ WORLD: "world", IMAGE: "image" });
 const RAD_TO_DEG = 180 / Math.PI;
 const SIDE_SWITCH_MARGIN = 0.15;
 const DEFAULT_MIN_VISIBILITY = 0.5;
+const FRAME_MARGIN = 0.05;
 
 function vis(p) {
   return p && p.visibility !== undefined ? p.visibility : 1;
@@ -13,6 +14,10 @@ function vis(p) {
 
 function scaled(p, w, h) {
   return { x: p.x * w, y: p.y * h, z: (p.z || 0) * w };
+}
+
+function finitePoint(p) {
+  return p && isFinite(p.x) && isFinite(p.y);
 }
 
 function angleAt(a, b, c) {
@@ -25,8 +30,14 @@ function angleAt(a, b, c) {
   return Math.acos(cos) * RAD_TO_DEG;
 }
 
-function angle2d(a, b, c) {
-  return angleAt({ x: a.x, y: a.y }, { x: b.x, y: b.y }, { x: c.x, y: c.y });
+function worldOf(world, i) {
+  const p = world && world[i];
+  return finitePoint(p) ? p : null;
+}
+
+function inFrame(p, min) {
+  if (!p || vis(p) < min) return false;
+  return p.x >= -FRAME_MARGIN && p.x <= 1 + FRAME_MARGIN && p.y >= -FRAME_MARGIN && p.y <= 1 + FRAME_MARGIN;
 }
 
 export function createSideTracker() {
@@ -50,68 +61,109 @@ export function createSideTracker() {
   };
 }
 
-function sidesFor(spec, dominant) {
-  const s = spec.side || SIDE.BEST;
-  if (s === SIDE.MEAN) return [SIDE.LEFT, SIDE.RIGHT];
-  if (s === SIDE.BEST) return [dominant];
-  return [s];
+function candidateSides(spec) {
+  const named = spec.side;
+  if (named === SIDE.LEFT || named === SIDE.RIGHT) return [named];
+  if (!spec.points || !spec.points.some((n) => hasSides(n))) return [SIDE.LEFT];
+  return [SIDE.LEFT, SIDE.RIGHT];
 }
 
-function measureOne(spec, side, ctx) {
-  const idx = spec.points.map((n) => landmarkIndex(n, side));
+function measureOne(spec, side, ctx, minVis) {
+  const idx = spec.points.map((n) => landmarkIndex(n, hasSides(n) ? side : SIDE.LEFT));
+  const visibility = Math.min.apply(null, idx.map((i) => vis(ctx.landmarks[i])));
+  const at = spec.type === MEASURE.ANGLE ? idx[1] : idx[0];
+  if (!(visibility >= minVis)) return { value: NaN, visibility, at, side, label: spec.label };
+  const worldPts = idx.map((i) => worldOf(ctx.world, i));
+  const useWorld = (spec.space || SPACE.WORLD) === SPACE.WORLD && worldPts.every(Boolean);
   const img = idx.map((i) => scaled(ctx.landmarks[i], ctx.width, ctx.height));
-  const useWorld = (spec.space || SPACE.WORLD) === SPACE.WORLD && ctx.world;
+  const pts = useWorld ? worldPts : img;
   let value = NaN;
   if (spec.type === MEASURE.ANGLE) {
-    value = useWorld ? angleAt(ctx.world[idx[0]], ctx.world[idx[1]], ctx.world[idx[2]]) : angle2d(img[0], img[1], img[2]);
+    const flat = (p) => (useWorld ? p : { x: p.x, y: p.y });
+    value = angleAt(flat(pts[0]), flat(pts[1]), flat(pts[2]));
   } else if (spec.type === MEASURE.INCLINE) {
-    const dx = img[1].x - img[0].x;
-    const dy = img[1].y - img[0].y;
-    value = Math.atan2(Math.abs(dy), Math.abs(dx)) * RAD_TO_DEG;
+    const dx = pts[1].x - pts[0].x;
+    const dy = pts[1].y - pts[0].y;
+    const dz = useWorld ? (pts[1].z || 0) - (pts[0].z || 0) : 0;
+    value = Math.atan2(Math.abs(dy), Math.hypot(dx, dz)) * RAD_TO_DEG;
   } else if (spec.type === MEASURE.OFFSET) {
-    value = (img[1].y - img[0].y) / ctx.torsoPx;
+    const scale = useWorld ? ctx.torsoWorld : ctx.torsoPx;
+    value = (pts[1].y - pts[0].y) / (scale || 1);
   } else if (spec.type === MEASURE.LINE_OFFSET) {
-    const [p, a, b] = img;
-    const dx = b.x - a.x;
-    const dy = b.y - a.y;
-    const len = Math.hypot(dx, dy) || 1;
-    const dist = Math.abs(dy * p.x - dx * p.y + b.x * a.y - b.y * a.x) / len;
-    const t = dx ? (p.x - a.x) / dx : 0;
-    const yLine = a.y + dy * t;
-    value = (yLine >= p.y ? 1 : -1) * dist / len;
+    const [p, a, b] = pts;
+    const abx = b.x - a.x, aby = b.y - a.y, abz = (b.z || 0) - (a.z || 0);
+    const apx = p.x - a.x, apy = p.y - a.y, apz = (p.z || 0) - (a.z || 0);
+    const len = Math.hypot(abx, aby, abz) || 1;
+    const cx = aby * apz - abz * apy;
+    const cy = abz * apx - abx * apz;
+    const cz = abx * apy - aby * apx;
+    const dist = Math.hypot(cx, cy, cz) / len;
+    const t = (apx * abx + apy * aby + apz * abz) / (len * len);
+    const yLine = a.y + aby * t;
+    const sign = p.y > yLine ? -1 : 1;
+    value = sign * dist / len;
   }
-  const minVis = Math.min.apply(null, idx.map((i) => vis(ctx.landmarks[i])));
-  const at = spec.type === MEASURE.ANGLE ? idx[1] : spec.type === MEASURE.LINE_OFFSET ? idx[0] : idx[0];
-  return { value, visibility: minVis, at };
+  return { value, visibility, at, side, label: spec.label };
+}
+
+function usable(spec, ctx, minVis) {
+  const sides = candidateSides(spec);
+  const primary = sides.map((s) => measureOne(spec, s, ctx, minVis)).filter((r) => isFinite(r.value));
+  if (primary.length) return primary;
+  if (!spec.fallback) return [];
+  return sides.map((s) => measureOne(spec.fallback, s, ctx, minVis)).filter((r) => isFinite(r.value));
 }
 
 export function computeMeasures(specs, landmarks, world, width, height, dominant) {
   const out = {};
   if (!landmarks) return out;
-  const sh = scaled(landmarks[landmarkIndex("shoulder", dominant)], width, height);
-  const hp = scaled(landmarks[landmarkIndex("hip", dominant)], width, height);
-  const torsoPx = Math.hypot(sh.x - hp.x, sh.y - hp.y) || 1;
-  const ctx = { landmarks, world, width, height, torsoPx };
+  const minVis = DEFAULT_MIN_VISIBILITY;
+  const sh = landmarks[landmarkIndex("shoulder", dominant)] || landmarks[landmarkIndex("shoulder", SIDE.LEFT)];
+  const hp = landmarks[landmarkIndex("hip", dominant)] || landmarks[landmarkIndex("hip", SIDE.LEFT)];
+  const shS = sh ? scaled(sh, width, height) : { x: 0, y: 0 };
+  const hpS = hp ? scaled(hp, width, height) : { x: 0, y: 1 };
+  const torsoPx = Math.hypot(shS.x - hpS.x, shS.y - hpS.y) || 1;
+  const shW = sh ? worldOf(world, landmarkIndex("shoulder", dominant)) : null;
+  const hpW = hp ? worldOf(world, landmarkIndex("hip", dominant)) : null;
+  const torsoWorld = shW && hpW ? Math.hypot(shW.x - hpW.x, shW.y - hpW.y, (shW.z || 0) - (hpW.z || 0)) || 1 : 1;
+  const ctx = { landmarks, world, width, height, torsoPx, torsoWorld };
   for (const name of Object.keys(specs || {})) {
     const spec = specs[name];
-    const sides = sidesFor(spec, dominant);
-    const parts = sides.map((s) => measureOne(spec, s, ctx)).filter((r) => isFinite(r.value));
+    const parts = usable(spec, ctx, minVis);
     if (!parts.length) {
-      out[name] = { value: NaN, visibility: 0, at: -1, side: sides[0] };
+      out[name] = { value: NaN, visibility: 0, at: -1, side: candidateSides(spec)[0], label: spec.label, type: spec.type };
       continue;
     }
-    const value = parts.reduce((s, r) => s + r.value, 0) / parts.length;
-    const visibility = Math.min.apply(null, parts.map((r) => r.visibility));
-    out[name] = { value, visibility, at: parts[0].at, side: sides.length > 1 ? SIDE.MEAN : sides[0], type: spec.type };
+    const weight = parts.reduce((s, r) => s + r.visibility, 0);
+    const value = parts.reduce((s, r) => s + r.value * r.visibility, 0) / weight;
+    const best = parts.slice().sort((a, b) => b.visibility - a.visibility)[0];
+    out[name] = {
+      value,
+      visibility: best.visibility,
+      at: best.at,
+      side: parts.length > 1 ? SIDE.MEAN : best.side,
+      label: best.label || spec.label,
+      type: spec.type,
+    };
   }
   return out;
 }
 
-export function requiredVisible(names, landmarks, dominant, minVisibility) {
+function groupVisible(names, landmarks, min, dominant) {
+  if (!names || !names.length) return true;
+  const sided = names.some((n) => hasSides(n));
+  const check = (side) => names.every((n) => inFrame(landmarks[landmarkIndex(n, hasSides(n) ? side : SIDE.LEFT)], min));
+  if (!sided) return check(SIDE.LEFT);
+  const order = dominant === SIDE.RIGHT ? [SIDE.RIGHT, SIDE.LEFT] : [SIDE.LEFT, SIDE.RIGHT];
+  return order.some(check);
+}
+
+export function requiredVisible(requires, landmarks, dominant, minVisibility) {
   if (!landmarks) return false;
   const min = minVisibility === undefined ? DEFAULT_MIN_VISIBILITY : minVisibility;
-  return (names || []).every((n) => {
-    const p = landmarks[landmarkIndex(n, hasSides(n) ? dominant : SIDE.LEFT)];
-    return p && vis(p) >= min && p.x > -0.05 && p.x < 1.05 && p.y > -0.05 && p.y < 1.05;
-  });
+  if (!requires) return true;
+  if (Array.isArray(requires)) return groupVisible(requires, landmarks, min, dominant);
+  if (Array.isArray(requires.any)) return requires.any.some((group) => groupVisible(group, landmarks, min, dominant));
+  if (Array.isArray(requires.all)) return requires.all.every((group) => groupVisible(group, landmarks, min, dominant));
+  return false;
 }
