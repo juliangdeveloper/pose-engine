@@ -20,7 +20,8 @@ engine.on('frame', (f) => draw(f.landmarks, f.measures));
 await engine.start({ source: 'camera', facingMode: 'user' });
 ```
 
-- `start({ source })`: `'camera'` abre la cámara, `'video'` usa un `<video>` que ya reproduce, `'synthetic'` mueve un esqueleto generado sin cámara ni modelo. `stop()`, `reset()`, `switchCamera()`, `destroy()`.
+- `start({ source })`: `'camera'` abre la cámara, `'video'` usa un `<video>` que ya reproduce, `'synthetic'` mueve un esqueleto generado sin cámara ni modelo. `stop()`, `reset()`, `destroy()`.
+- `switchCamera()` alterna entre frontal (`user`) y trasera (`environment`). Si la cámara está abierta, detiene todas las pistas del stream anterior y espera a soltarlas antes de volver a llamar a `getUserMedia`: primero `facingMode: { exact }`, si falla `{ ideal }`, y si ninguna coincide elige un `deviceId` con `enumerateDevices`. No reinicia las repeticiones ni el cronómetro. Sin cámara abierta solo recuerda la elección para el próximo `start`.
 - Eventos con `on(tipo, fn)`, que devuelve la función para quitarlo:
   - `frame`: 33 puntos normalizados y suavizados, puntos 3D en metros, medidas, fase, reps, plancha, aviso y fps.
   - `rep`: número, duración, calidad de 0 a 1 y controles de forma que fallaron.
@@ -59,7 +60,7 @@ Incluidos en `engine/v1/exercises/calisthenics.js`:
 - Plancha: cronómetro y cadera caída o alta.
 
 ## La demo
-- Elige el ejercicio y pulsa **Cámara**. **Girar** cambia entre la cámara frontal y la trasera.
+- Elige el ejercicio y pulsa **Cámara**. El icono de cambiar cámara alterna entre frontal y trasera, también antes de encenderla. La elección se guarda en `localStorage` (`pose-engine.camera`). Si hay menos de dos cámaras de vídeo, el icono se oculta. Solo la frontal se espeja.
 - Ves el esqueleto con los ángulos, el contador o el cronómetro, la fase y el aviso de forma.
 - **Demo** (o `?demo=1`) mueve un esqueleto sintético, sin cámara ni modelo. Si no das permiso de cámara, la página lo explica y ofrece la demo.
 - ↺ reinicia el contador.
