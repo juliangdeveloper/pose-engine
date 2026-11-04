@@ -1,5 +1,5 @@
 export const APP_ID = "pose-engine";
-export const APP_VERSION = "0.1.2";
+export const APP_VERSION = "0.1.3";
 export const REPO_URL = "https://github.com/juliangdeveloper/pose-engine";
 export const STATS_KEY = "pose-engine.stats";
 export const CAMERA_KEY = "pose-engine.camera";
