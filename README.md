@@ -2,12 +2,12 @@
 
 > Motor open source de estimación de pose en tiempo real para la web: lee tu cuerpo con la cámara, mide ángulos, cuenta repeticiones y cronometra posturas, todo en el dispositivo.
 
-**[▶ Probar la demo](https://juliangdeveloper.github.io/pose-engine/)** · la interfaz es una demo del motor
+**[▶ Abrir la app](https://juliangdeveloper.github.io/pose-engine/)**
 
-<img src="assets/screenshot.jpg" alt="Demo de pose-engine contando sentadillas con el esqueleto y los ángulos sobre el video" width="320">
+<img src="assets/screenshot.jpg" alt="pose-engine contando sentadillas con el esqueleto y los ángulos sobre el video" width="320">
 
 ## Usar el motor en tu proyecto
-El motor es un módulo ES en `engine/v1/`, separado de la demo. Los cambios compatibles se publican ahí; uno incompatible irá a `engine/v2/`.
+El motor es un módulo ES en `engine/v1/`, separado de la app. Los cambios compatibles se publican ahí; uno incompatible irá a `engine/v2/`.
 
 ```javascript
 const root = 'https://juliangdeveloper.github.io/pose-engine/engine/v1/';
@@ -57,18 +57,18 @@ engine.loadExercises([{
 - Ejercicios de aguantar (`kind: 'hold'`): `hold.when`.
 - `gate` es una condición extra para empezar a contar; `cues` son avisos en vivo; `checks` revisan el mínimo o máximo de cada repetición solo si esa medida se vio.
 - Las condiciones admiten `lt`, `gt`, `between`, `all`, `any` y `not`.
-- `demo` define el movimiento de la demo sintética.
+- `demo` define el movimiento del esqueleto sintético de `source: 'synthetic'`.
 
 Incluidos en `engine/v1/exercises/calisthenics.js`. Cuentan con el teléfono en cualquier posición:
 - Flexiones y dominadas: hombro, codo y muñeca de un lado. Cadera, rodilla y tobillo son opcionales.
 - Sentadillas: cadera, rodilla y tobillo, o cadera y rodilla con el tronco si el tobillo no se ve.
 - Plancha: hombro, cadera y rodilla, o hombro, cadera y tobillo.
 
-## La demo
+## La app
 - Elige el ejercicio y pulsa **Cámara**. El icono de cambiar cámara alterna entre frontal y trasera, también antes de encenderla. La elección se guarda en `localStorage` (`pose-engine.camera`). Si hay menos de dos cámaras de vídeo, el icono se oculta. Solo la frontal se espeja.
 - **0.5× / 1×** amplía el encuadre cuando se puede (zoom mínimo o ultra gran angular). Solo aparece en ese caso. La elección queda en `pose-engine.lens` y se conserva al cambiar de cámara.
 - Ves el esqueleto con los ángulos, el contador o el cronómetro, la fase y el aviso de forma.
-- **Demo** (o `?demo=1`) mueve un esqueleto sintético, sin cámara ni modelo. Si no das permiso de cámara, la página lo explica y ofrece la demo.
+- Si no das permiso de cámara, la página lo explica.
 - ↺ reinicia el contador.
 
 ## Stack
@@ -79,6 +79,7 @@ Incluidos en `engine/v1/exercises/calisthenics.js`. Cuentan con el teléfono en 
   - Es un solo paquete WASM que corre en Safari de iOS con WebGL2 y cae a CPU si la GPU falla.
   - MoveNet da 17 puntos solo en 2D y necesita cargar TF.js y su backend aparte.
 - El modelo y el WASM quedan en caché después de la primera carga. Los puntos se suavizan con un filtro One Euro.
+- Al abrirse guarda el progreso en `localStorage` (`meta.v1.pose-engine`), que lee el [portafolio](https://juliangdeveloper.github.io/).
 
 ```
 python3 -m http.server 8000

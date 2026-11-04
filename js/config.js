@@ -1,5 +1,5 @@
 export const APP_ID = "pose-engine";
-export const APP_VERSION = "0.1.3";
+export const APP_VERSION = "0.1.4";
 export const REPO_URL = "https://github.com/juliangdeveloper/pose-engine";
 export const STATS_KEY = "pose-engine.stats";
 export const CAMERA_KEY = "pose-engine.camera";
@@ -30,36 +30,34 @@ export const COLOR = Object.freeze({
 });
 
 export const TEXT = Object.freeze({
-  idle: "Elige un ejercicio y pulsa Cámara. Sin cámara, prueba la demo.",
+  idle: "Elige un ejercicio y pulsa Cámara.",
   loading: "Cargando…",
   opening: "Abriendo cámara…",
   start: "Cámara",
   stop: "Parar",
-  demo: "Demo",
   reps: "Reps",
   hold: "Plancha",
   best: "mejor",
   good: "¡Bien hecha!",
   phase: Object.freeze({ lost: "Sin cuerpo", idle: "Posición", holding: "Aguantando" }),
   errors: Object.freeze({
-    "camera-denied": "No hay permiso para la cámara. Actívalo en Ajustes › Safari › Cámara y recarga, o mira la demo.",
-    "camera-not-found": "No se encontró una cámara en este dispositivo. Puedes ver la demo.",
-    "camera-busy": "La cámara está en uso por otra app. Ciérrala y vuelve a intentarlo, o mira la demo.",
-    "insecure-context": "La cámara solo funciona con HTTPS. Abre la página publicada o mira la demo.",
-    "camera-unsupported": "Este navegador no permite usar la cámara. Puedes ver la demo.",
-    "camera-error": "No se pudo abrir la cámara. Puedes ver la demo.",
-    "model-failed": "No se pudo cargar. Revisa la conexión o mira la demo.",
-    "detect-failed": "No responde. Vuelve a intentarlo o mira la demo.",
+    "camera-denied": "No hay permiso para la cámara. Actívalo en Ajustes › Safari › Cámara y recarga.",
+    "camera-not-found": "No se encontró una cámara en este dispositivo.",
+    "camera-busy": "La cámara está en uso por otra app. Ciérrala y vuelve a intentarlo.",
+    "insecure-context": "La cámara solo funciona con HTTPS. Abre la página publicada.",
+    "camera-unsupported": "Este navegador no permite usar la cámara.",
+    "camera-error": "No se pudo abrir la cámara.",
+    "model-failed": "No se pudo cargar. Revisa la conexión.",
+    "detect-failed": "No responde. Vuelve a intentarlo.",
   }),
 });
 
 export const PUNTO_FASE = Object.freeze({ HECHO: "hecho", PENDIENTE: "pendiente" });
 export const FASE_PUNTOS = Object.freeze([
-  Object.freeze({ texto: "Motor como módulo ES separado de la demo, con eventos frame, rep, state, hold y cue", estado: PUNTO_FASE.HECHO }),
+  Object.freeze({ texto: "Motor como módulo ES separado de la app, con eventos frame, rep, state, hold y cue", estado: PUNTO_FASE.HECHO }),
   Object.freeze({ texto: "Ejercicios como datos: ángulos, fases, secuencia de repetición, avisos y controles de forma", estado: PUNTO_FASE.HECHO }),
   Object.freeze({ texto: "Flexiones, sentadillas, dominadas y plancha con cronómetro", estado: PUNTO_FASE.HECHO }),
   Object.freeze({ texto: "MediaPipe Pose lite en el dispositivo, GPU con respaldo en CPU y suavizado One Euro", estado: PUNTO_FASE.HECHO }),
-  Object.freeze({ texto: "Demo sintética sin cámara", estado: PUNTO_FASE.HECHO }),
   Object.freeze({ texto: "Probar en iPhone y calibrar umbrales con personas reales", estado: PUNTO_FASE.PENDIENTE }),
   Object.freeze({ texto: "Ejercicios de artes marciales y ballet", estado: PUNTO_FASE.PENDIENTE }),
 ]);
