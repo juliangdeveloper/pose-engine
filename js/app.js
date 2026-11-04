@@ -3,7 +3,7 @@ import {
   APP_ID, APP_VERSION, CAMERA_KEY, LENS_KEY, STATS_KEY, STAT, STATS, FEEDBACK_MS, LABEL_FONT_PX, JOINT_RADIUS_PX,
   BONE_WIDTH_PX, MIN_JOINT_VISIBILITY, MAX_DPR, SECONDS_PER_MINUTE, COLOR, TEXT,
 } from "./config.js";
-import { metaUpdate, metaRead, crearEscritor, demoOn } from "./meta.js";
+import { metaUpdate, metaRead, crearEscritor, metaDeclararProyecto } from "./meta.js";
 
 const LEFT_PREFIX = "left_";
 const MIN_VIDEO_INPUTS = 2;
@@ -18,8 +18,8 @@ const stage = $("stage");
 const ui = {
   picker: $("picker"), counter: document.querySelector(".counter"), counterLabel: $("counter-label"), counterValue: $("counter-value"),
   counterSub: $("counter-sub"), phase: $("phase"), cue: $("cue"), msg: $("stage-msg"), msgText: $("stage-text"),
-  msgHint: $("stage-hint"), msgDemo: $("btn-msg-demo"), camera: $("btn-camera"), flip: $("btn-flip"), zoom: $("btn-zoom"),
-  zoomLabel: $("zoom-label"), demo: $("btn-demo"), reset: $("btn-reset"),
+  msgHint: $("stage-hint"), camera: $("btn-camera"), flip: $("btn-flip"), zoom: $("btn-zoom"),
+  zoomLabel: $("zoom-label"), reset: $("btn-reset"),
 };
 
 function loadFacing() {
@@ -124,10 +124,9 @@ function chooseExercise(id) {
   else ui.msgHint.textContent = engine.exercise().view || "";
 }
 
-function showMessage(text, hint, withDemo) {
+function showMessage(text, hint) {
   ui.msgText.textContent = text;
   ui.msgHint.textContent = hint || "";
-  ui.msgDemo.hidden = !withDemo;
   ui.msg.hidden = false;
 }
 
@@ -217,18 +216,9 @@ function draw(frame) {
   const w = stage.clientWidth;
   const h = stage.clientHeight;
   ctx.clearRect(0, 0, w, h);
-  if (frame.source === SOURCE.SYNTHETIC) {
-    ctx.fillStyle = "#11141a";
-    ctx.fillRect(0, 0, w, h);
-  }
   const lm = frame.landmarks;
   if (!lm) return;
   const box = fit(frame);
-  if (frame.source === SOURCE.SYNTHETIC) {
-    ctx.strokeStyle = "rgba(255,255,255,0.08)";
-    ctx.lineWidth = 1;
-    ctx.strokeRect(box.x + 0.5, box.y + 0.5, box.w - 1, box.h - 1);
-  }
   const px = (p) => ({ x: box.x + (frame.mirrored ? 1 - p.x : p.x) * box.w, y: box.y + p.y * box.h });
   ctx.lineCap = "round";
   ctx.lineWidth = BONE_WIDTH_PX;
@@ -279,7 +269,6 @@ function setRunning(on, src) {
   source = on ? src : null;
   ui.camera.textContent = on && src === SOURCE.CAMERA ? TEXT.stop : TEXT.start;
   ui.camera.classList.toggle("on", on && src === SOURCE.CAMERA);
-  ui.demo.textContent = on && src === SOURCE.SYNTHETIC ? TEXT.stop : TEXT.demo;
   document.body.dataset.source = on ? src : "";
   renderCameraChrome();
 }
@@ -297,17 +286,10 @@ async function startCamera() {
   } catch (e) {
     setRunning(false);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    showMessage(TEXT.errors[e.code] || TEXT.errors["camera-error"], "", true);
+    showMessage(TEXT.errors[e.code] || TEXT.errors["camera-error"], "");
   } finally {
     busy = false;
   }
-}
-
-async function startDemo() {
-  feedback = null;
-  await engine.start({ source: SOURCE.SYNTHETIC });
-  setRunning(true, SOURCE.SYNTHETIC);
-  hideMessage();
 }
 
 function stopAll() {
@@ -362,7 +344,7 @@ engine.on("hold", (h) => {
 engine.on("error", (e) => {
   if (e.code === "detect-failed") {
     setRunning(false);
-    showMessage(TEXT.errors[e.code], "", true);
+    showMessage(TEXT.errors[e.code], "");
   }
 });
 
@@ -370,13 +352,6 @@ ui.camera.addEventListener("click", () => {
   if (running && source === SOURCE.CAMERA) stopAll();
   else startCamera();
 });
-
-ui.demo.addEventListener("click", () => {
-  if (running && source === SOURCE.SYNTHETIC) stopAll();
-  else startDemo();
-});
-
-ui.msgDemo.addEventListener("click", () => startDemo());
 
 ui.zoom.addEventListener("click", async () => {
   if (busy) return;
@@ -388,7 +363,7 @@ ui.zoom.addEventListener("click", async () => {
     renderZoom();
   } catch (e) {
     setRunning(false);
-    showMessage(TEXT.errors[e.code] || TEXT.errors["camera-error"], "", true);
+    showMessage(TEXT.errors[e.code] || TEXT.errors["camera-error"], "");
   } finally {
     busy = false;
   }
@@ -403,7 +378,7 @@ ui.flip.addEventListener("click", async () => {
     renderCameraChrome();
   } catch (e) {
     setRunning(false);
-    showMessage(TEXT.errors[e.code] || TEXT.errors["camera-error"], "", true);
+    showMessage(TEXT.errors[e.code] || TEXT.errors["camera-error"], "");
   } finally {
     busy = false;
   }
@@ -444,7 +419,7 @@ if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) {
   navigator.mediaDevices.addEventListener("devicechange", () => refreshCameras());
 }
 if (!metaRead(APP_ID)) escritorMeta.pedir();
-if (demoOn()) startDemo();
+metaDeclararProyecto(APP_ID, APP_VERSION);
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => navigator.serviceWorker.register("sw.js?v=" + APP_VERSION).catch(() => {}));
