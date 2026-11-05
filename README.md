@@ -73,7 +73,7 @@ Incluidos en `engine/v1/exercises/calisthenics.js`. Cuentan con el teléfono en 
 
 ## Stack
 - JavaScript vanilla, PWA con service worker, sin dependencias de npm.
-- Modelo: [MediaPipe Tasks Vision](https://ai.google.dev/edge/mediapipe/solutions/vision/pose_landmarker) PoseLandmarker lite (Apache 2.0), versión 1.2.0 fijada desde jsDelivr, en modo VIDEO con GPU y respaldo en CPU.
+- Modelo: [MediaPipe Tasks Vision](https://ai.google.dev/edge/mediapipe/solutions/vision/pose_landmarker) PoseLandmarker lite (Apache 2.0), versión 1.2.2 fijada desde jsDelivr, en modo VIDEO con GPU y respaldo en CPU.
 - Por qué MediaPipe y no MoveNet con TF.js:
   - Da 33 puntos con visibilidad y además puntos 3D en metros, que hacen que los ángulos dependan menos de la vista.
   - Es un solo paquete WASM que corre en Safari de iOS con WebGL2 y cae a CPU si la GPU falla.

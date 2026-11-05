@@ -1,4 +1,4 @@
-export const TASKS_VISION_VERSION = "1.2.0";
+export const TASKS_VISION_VERSION = "1.2.2";
 export const TASKS_VISION_URL = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@" + TASKS_VISION_VERSION + "/vision_bundle.mjs";
 export const WASM_BASE = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@" + TASKS_VISION_VERSION + "/wasm";
 export const MODEL = Object.freeze({
