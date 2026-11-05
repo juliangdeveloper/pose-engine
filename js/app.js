@@ -1,7 +1,7 @@
-import { createPoseEngine, CONNECTIONS, LANDMARK, SOURCE, STATUS, KIND, PHASE_LOST, FACING, LENS, MEASURE } from "../engine/v1/index.js?v=0.1.5";
+import { createPoseEngine, CONNECTIONS, LANDMARK, SOURCE, STATUS, KIND, PHASE_LOST, FACING, LENS, MEASURE } from "../engine/v1/index.js?v=0.2.0";
 import {
   APP_ID, APP_VERSION, CAMERA_KEY, LENS_KEY, STATS_KEY, STAT, STATS, FEEDBACK_MS, LABEL_FONT_PX, JOINT_RADIUS_PX,
-  BONE_WIDTH_PX, MIN_JOINT_VISIBILITY, MAX_DPR, SECONDS_PER_MINUTE, COLOR, TEXT,
+  BONE_WIDTH_PX, MIN_JOINT_VISIBILITY, MAX_DPR, SECONDS_PER_MINUTE, COLOR, TEXT, ICON, ICON_DEFAULT, POP_DETECT_MS, POP_GRADE_MS,
 } from "./config.js";
 import { metaUpdate, metaRead, crearEscritor, metaDeclararProyecto } from "./meta.js";
 
@@ -16,7 +16,9 @@ const canvas = $("overlay");
 const ctx = canvas.getContext("2d");
 const stage = $("stage");
 const ui = {
-  picker: $("picker"), counter: document.querySelector(".counter"), counterLabel: $("counter-label"), counterValue: $("counter-value"),
+  detect: $("detect"), detectIcon: $("detect-icon"), detectName: $("detect-name"), list: $("btn-list"),
+  moves: $("moves"), movesList: $("moves-list"), popDetect: $("pop-detect"), popDetectIcon: $("pop-detect-icon"),
+  popDetectName: $("pop-detect-name"), popGrade: $("pop-grade"), counter: document.querySelector(".counter"), counterLabel: $("counter-label"), counterValue: $("counter-value"),
   counterSub: $("counter-sub"), phase: $("phase"), cue: $("cue"), msg: $("stage-msg"), msgText: $("stage-text"),
   msgHint: $("stage-hint"), camera: $("btn-camera"), flip: $("btn-flip"), zoom: $("btn-zoom"),
   zoomLabel: $("zoom-label"), reset: $("btn-reset"),
@@ -100,28 +102,66 @@ function fmtTime(s) {
   return m + ":" + String(r).padStart(2, "0");
 }
 
-function buildPicker() {
-  const current = engine.exercise();
-  ui.picker.replaceChildren(...engine.exercises().map((ex) => {
-    const b = document.createElement("button");
-    b.type = "button";
-    b.className = "chip";
-    b.textContent = ex.name;
-    b.dataset.id = ex.id;
-    b.setAttribute("aria-pressed", String(ex.id === current.id));
-    b.addEventListener("click", () => chooseExercise(ex.id));
-    return b;
+function iconMarkup(id) {
+  return ICON[id] || ICON_DEFAULT;
+}
+
+function buildMoves() {
+  ui.movesList.replaceChildren(...engine.exercises().filter((ex) => ex.detects).map((ex) => {
+    const li = document.createElement("li");
+    li.className = "move";
+    const icon = document.createElement("span");
+    icon.className = "move-icon";
+    icon.innerHTML = iconMarkup(ex.id);
+    const body = document.createElement("div");
+    body.className = "move-body";
+    const name = document.createElement("p");
+    name.className = "move-name";
+    name.textContent = ex.name;
+    const detect = document.createElement("p");
+    detect.className = "move-text";
+    detect.textContent = ex.about.detect;
+    const grade = document.createElement("p");
+    grade.className = "move-text tenue-text";
+    grade.textContent = ex.about.grade;
+    body.append(name, detect, grade);
+    li.append(icon, body);
+    return li;
   }));
 }
 
-function chooseExercise(id) {
-  engine.setExercise(id);
-  feedback = null;
-  Array.from(ui.picker.children).forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.id === id)));
-  renderCounter(engine.getState());
-  renderCue(null);
-  if (!running) showMessage(TEXT.idle, engine.exercise().view);
-  else ui.msgHint.textContent = engine.exercise().view || "";
+function renderDetected(d) {
+  ui.detect.dataset.on = d && d.id ? "true" : "false";
+  ui.detectIcon.innerHTML = iconMarkup(d && d.id);
+  ui.detectName.textContent = d && d.id ? d.name : running ? TEXT.searching : TEXT.waiting;
+}
+
+function restart(el, cls) {
+  el.classList.remove(cls);
+  void el.offsetWidth;
+  el.classList.add(cls);
+}
+
+let popDetectTimer = 0;
+let popGradeTimer = 0;
+
+function popDetect(d) {
+  ui.popDetectIcon.innerHTML = iconMarkup(d.id);
+  ui.popDetectName.textContent = d.name;
+  ui.popDetect.hidden = false;
+  restart(ui.popDetect, "show");
+  restart(ui.detect, "flash");
+  clearTimeout(popDetectTimer);
+  popDetectTimer = setTimeout(() => { ui.popDetect.hidden = true; }, POP_DETECT_MS);
+}
+
+function popGrade(g) {
+  ui.popGrade.textContent = g.label;
+  ui.popGrade.dataset.level = g.level;
+  ui.popGrade.hidden = false;
+  restart(ui.popGrade, "show");
+  clearTimeout(popGradeTimer);
+  popGradeTimer = setTimeout(() => { ui.popGrade.hidden = true; }, POP_GRADE_MS);
 }
 
 function showMessage(text, hint) {
@@ -135,15 +175,15 @@ function hideMessage() {
 }
 
 function renderCounter(state) {
-  const def = engine.exercise();
-  if (def.kind === KIND.HOLD) {
+  if (state.kind === KIND.HOLD) {
     ui.counterLabel.textContent = TEXT.hold;
     ui.counterValue.textContent = fmtTime(state.hold ? state.hold.seconds : 0);
     ui.counterSub.textContent = TEXT.best + " " + fmtTime(state.hold ? state.hold.best : 0);
   } else {
     ui.counterLabel.textContent = TEXT.reps;
     ui.counterValue.textContent = String(state.reps || 0);
-    ui.counterSub.textContent = feedback && feedback.score ? feedback.score : "";
+    ui.counterSub.textContent = feedback && feedback.label ? feedback.label : "";
+    ui.counterSub.dataset.level = feedback && feedback.level ? feedback.level : "";
   }
 }
 
@@ -155,7 +195,7 @@ function renderPhase(phase, label) {
 function renderCue(cue) {
   const now = performance.now();
   let show = cue;
-  if (!show && feedback && now - feedback.at < FEEDBACK_MS) show = { text: feedback.text, level: feedback.level };
+  if (!show && feedback && now - feedback.at < FEEDBACK_MS) show = { text: feedback.text, level: feedback.cue };
   ui.cue.textContent = show && show.text ? show.text : "";
   ui.cue.dataset.level = show && show.text ? show.level || "warn" : "";
 }
@@ -243,6 +283,7 @@ function draw(frame) {
     ctx.fill();
   });
   const def = engine.exercise();
+  if (!def) return;
   ctx.font = "600 " + LABEL_FONT_PX + "px -apple-system, system-ui, sans-serif";
   ctx.textBaseline = "middle";
   Object.keys(frame.measures).forEach((k) => {
@@ -271,13 +312,14 @@ function setRunning(on, src) {
   ui.camera.classList.toggle("on", on && src === SOURCE.CAMERA);
   document.body.dataset.source = on ? src : "";
   renderCameraChrome();
+  renderDetected(engine.getState().detected);
 }
 
 async function startCamera() {
   if (busy) return;
   busy = true;
   feedback = null;
-  showMessage(TEXT.loading, engine.exercise().view);
+  showMessage(TEXT.loading, TEXT.idleHint);
   try {
     await engine.start({ source: SOURCE.CAMERA });
     setRunning(true, SOURCE.CAMERA);
@@ -297,7 +339,8 @@ function stopAll() {
   setRunning(false);
   lastFrame = null;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  showMessage(TEXT.idle, engine.exercise().view);
+  showMessage(TEXT.idle, TEXT.idleHint);
+  renderDetected(engine.getState().detected);
 }
 
 engine.on("status", (s) => {
@@ -311,19 +354,27 @@ engine.on("frame", (frame) => {
   if (frame.kind === KIND.HOLD) renderCounter(frame);
 });
 
+engine.on("exercise", (e) => {
+  feedback = null;
+  renderDetected(e);
+  renderCounter(engine.getState());
+  if (e.id) popDetect(e);
+});
+
+engine.on("grade", (g) => {
+  feedback = { at: performance.now(), label: g.label, level: g.level, text: g.tip || TEXT.gradeText[g.level], cue: g.tip ? "warn" : "good" };
+  renderCounter(engine.getState());
+  popGrade(g);
+  renderCue(engine.getState().cue);
+});
+
 engine.on("state", (s) => renderPhase(s.phase, s.label));
 
 engine.on("cue", (c) => renderCue(c.id ? c : null));
 
 engine.on("rep", (r) => {
-  const ok = r.checks.filter((c) => c.ok).length;
-  feedback = {
-    at: performance.now(),
-    text: r.failed.length ? r.failed[0].text : TEXT.good,
-    level: r.failed.length ? "warn" : "good",
-    score: ok + "/" + r.checks.length + " forma",
-  };
-  renderCounter({ reps: r.count });
+  if (!r.grade) feedback = { at: performance.now(), label: "", level: "", text: r.failed.length ? r.failed[0].text : TEXT.good, cue: r.failed.length ? "warn" : "good" };
+  renderCounter({ kind: KIND.REPS, reps: r.count });
   ui.counter.classList.remove("bump");
   void ui.counter.offsetWidth;
   ui.counter.classList.add("bump");
@@ -396,6 +447,8 @@ function buildInfo() {
 }
 
 $("btn-info").addEventListener("click", () => $("info").showModal());
+ui.list.addEventListener("click", () => ui.moves.showModal());
+ui.moves.addEventListener("click", (e) => { if (e.target === ui.moves) ui.moves.close(); });
 
 Object.keys(LANDMARK).forEach((k) => { if (k.indexOf(LEFT_PREFIX) === 0) leftJoints.add(LANDMARK[k]); });
 
@@ -407,12 +460,13 @@ window.addEventListener("resize", resizeCanvas);
 if (window.ResizeObserver) new ResizeObserver(resizeCanvas).observe(stage);
 
 $("bar-version").textContent = "v" + APP_VERSION;
-buildPicker();
+buildMoves();
 buildInfo();
 renderCounter(engine.getState());
 renderPhase(PHASE_LOST);
+renderDetected(null);
 resizeCanvas();
-showMessage(TEXT.idle, engine.exercise().view);
+showMessage(TEXT.idle, TEXT.idleHint);
 setRunning(false);
 refreshCameras();
 if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) {

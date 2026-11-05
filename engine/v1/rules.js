@@ -1,10 +1,13 @@
+import { gradeForm, validateGrade } from "./grading.js";
+import { validateRecognize } from "./classifier.js";
+
 export const KIND = Object.freeze({ REPS: "reps", HOLD: "hold" });
 export const PHASE_LOST = "lost";
 export const PHASE_IDLE = "idle";
 export const PHASE_HOLDING = "holding";
 export const STAT = Object.freeze({ MIN: "min", MAX: "max" });
 
-const DEFAULTS = Object.freeze({ minFrames: 2, minRepMs: 400, cueMs: 350, graceMs: 600, lostMs: 700 });
+const DEFAULTS = Object.freeze({ minFrames: 2, minRepMs: 400, cueMs: 350, graceMs: 600, lostMs: 700, holdGradeMs: 5000 });
 const MS_PER_S = 1000;
 const HYSTERESIS_DEG = 12;
 
@@ -55,6 +58,8 @@ export function validateExercise(def) {
     (def.rep || []).forEach((id) => { if (ids.indexOf(id) === -1) errors.push(def.id + ": fase desconocida en rep: " + id); });
   }
   if (def.kind === KIND.HOLD && (!def.hold || !def.hold.when)) errors.push(def.id + ": falta hold.when");
+  validateGrade(def.grade, def.id).forEach((e) => errors.push(e));
+  validateRecognize(def.recognize, def.id).forEach((e) => errors.push(e));
   return errors;
 }
 
@@ -77,6 +82,9 @@ export function createExerciseRuntime(def, options) {
   let holdLastTrue = -Infinity;
   let holdLastT = null;
   let holdEmittedS = -1;
+  let holdStats = {};
+  let holdGradeStart = null;
+  const holdGradeMs = (def.hold && def.hold.gradeEveryMs) || o.holdGradeMs;
 
   function stats(values) {
     for (const k of Object.keys(values)) {
@@ -115,10 +123,12 @@ export function createExerciseRuntime(def, options) {
     const passed = checks.filter((c) => c.ok).length;
     const snapshot = {};
     for (const k of Object.keys(repStats)) snapshot[k] = { min: repStats[k].min, max: repStats[k].max };
+    const durationMs = repStart === null ? 0 : t - repStart;
     return {
       exercise: def.id,
       count: reps,
-      durationMs: repStart === null ? 0 : t - repStart,
+      durationMs,
+      grade: gradeForm(def.grade, snapshot, durationMs),
       quality: checks.length ? passed / checks.length : 1,
       checks,
       failed: checks.filter((c) => !c.ok).map((c) => ({ id: c.id, text: c.text })),
@@ -171,7 +181,9 @@ export function createExerciseRuntime(def, options) {
     if (done) {
       if (repStart === null || t - repStart >= o.minRepMs) {
         reps++;
-        events.push({ type: "rep", data: evaluateRep(t) });
+        const rep = evaluateRep(t);
+        events.push({ type: "rep", data: rep });
+        if (rep.grade) events.push({ type: "grade", data: Object.assign({ exercise: def.id, kind: def.kind, rep: rep.count }, rep.grade) });
       }
       history = [target];
       repStart = t;
@@ -190,6 +202,25 @@ export function createExerciseRuntime(def, options) {
     events.push({ type: "hold", data: { exercise: def.id, active: holdActive, seconds: holdMs / MS_PER_S, best: holdBest / MS_PER_S } });
   }
 
+  function trackHold(values) {
+    for (const k of Object.keys(values)) {
+      const v = values[k];
+      if (!isFinite(v)) continue;
+      const s = holdStats[k] || (holdStats[k] = { min: Infinity, max: -Infinity });
+      if (v < s.min) s.min = v;
+      if (v > s.max) s.max = v;
+    }
+  }
+
+  function holdGrade(t, events) {
+    if (holdGradeStart === null) { holdGradeStart = t; holdStats = {}; return; }
+    if (t - holdGradeStart < holdGradeMs) return;
+    const grade = gradeForm(def.grade, holdStats, t - holdGradeStart);
+    holdGradeStart = t;
+    holdStats = {};
+    if (grade) events.push({ type: "grade", data: Object.assign({ exercise: def.id, kind: def.kind, seconds: holdMs / MS_PER_S }, grade) });
+  }
+
   function updateHold(values, t, events, ok) {
     const holdWhen = holdActive ? relax(def.hold.when) : def.hold.when;
     const good = ok && testCondition(holdWhen, values);
@@ -201,6 +232,7 @@ export function createExerciseRuntime(def, options) {
         holdActive = true;
         holdMs = 0;
         holdEmittedS = -1;
+        holdGradeStart = null;
         setPhase(PHASE_HOLDING, events);
         holdEvent(events);
       } else {
@@ -219,6 +251,8 @@ export function createExerciseRuntime(def, options) {
       setPhase(ok ? PHASE_IDLE : PHASE_LOST, events);
     }
     if (holdActive) {
+      trackHold(values);
+      holdGrade(t, events);
       holdBest = Math.max(holdBest, holdMs);
       const whole = Math.floor(holdMs / MS_PER_S);
       if (whole !== holdEmittedS) {
@@ -304,6 +338,9 @@ export function createExerciseRuntime(def, options) {
       holdBest = 0;
       holdLastT = null;
       holdEmittedS = -1;
+      holdStats = {};
+      holdGradeStart = null;
+      lastSeen = -Infinity;
     },
   };
 }
