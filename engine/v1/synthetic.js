@@ -13,6 +13,7 @@ const FRAME_WIDTH = 480;
 const WIDE_FRAME_WIDTH = 640;
 const DEFAULT_PERIOD_MS = 2400;
 const DIP_START = 0.7;
+export const SEGMENT_MS = 12000;
 
 export const PROFILE = Object.freeze({ COSINE: "cosine", DIP: "dip" });
 
@@ -127,7 +128,7 @@ function blend(from, to, v) {
   return out;
 }
 
-export function createSyntheticSource(demo) {
+function singleSource(demo) {
   const rig = RIGS[demo && demo.rig];
   if (!rig) throw new Error("Rig de demo desconocido: " + (demo && demo.rig));
   const box = rig.box;
@@ -178,7 +179,36 @@ export function createSyntheticSource(demo) {
         put("mouth_" + side, lerp(s.neck, s.nose, 0.6), near);
       }
       put("nose", s.nose, true);
-      return { landmarks, worldLandmarks: world };
+      return { landmarks, worldLandmarks: world, width, height };
+    },
+  };
+}
+
+function segmentList(demo) {
+  if (Array.isArray(demo)) return demo;
+  if (demo && Array.isArray(demo.segments)) return demo.segments;
+  return null;
+}
+
+export function createSyntheticSource(demo) {
+  const list = segmentList(demo);
+  if (!list) return singleSource(demo);
+  if (!list.length) throw new Error("Secuencia de demo vacía");
+  const parts = list.map((d) => ({ source: singleSource(d), ms: d.durationMs || SEGMENT_MS }));
+  const total = parts.reduce((s, p) => s + p.ms, 0);
+  let t0 = null;
+  return {
+    width: parts[0].source.width,
+    height: parts[0].source.height,
+    sample(tMs) {
+      if (t0 === null) t0 = tMs;
+      let e = (tMs - t0) % total;
+      let i = 0;
+      while (e >= parts[i].ms) { e -= parts[i].ms; i++; }
+      const r = parts[i].source.sample(e);
+      this.width = r.width;
+      this.height = r.height;
+      return r;
     },
   };
 }

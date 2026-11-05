@@ -28,6 +28,23 @@ export const CALISTHENICS = Object.freeze([
       { id: "lockout", text: "Estira los brazos arriba", measure: "elbow", stat: "max", gt: 150 },
       { id: "line", text: "Mantén el cuerpo recto", measure: "body", stat: "min", gt: 155 },
     ],
+    about: {
+      detect: "Cuerpo horizontal y recto mientras los codos se doblan y se estiran.",
+      grade: "Profundidad, brazos estirados arriba, cuerpo recto y ritmo.",
+    },
+    recognize: [
+      { feature: "elbow", stat: "range", gt: 35, weight: 3, must: true },
+      { feature: "body", stat: "mean", gt: 145, weight: 2 },
+      { feature: "torso", stat: "mean", lt: 45, weight: 3, must: true },
+      { feature: "knee", stat: "range", lt: 25, weight: 1 },
+      { feature: "armsUp", stat: "mean", lt: 0.2, weight: 2 },
+    ],
+    grade: [
+      { id: "depth", label: "Profundidad", measure: "elbow", stat: "min", excelente: { lt: 90 }, bien: { lt: 105 }, tip: "Baja más el pecho" },
+      { id: "lockout", label: "Brazos", measure: "elbow", stat: "max", excelente: { gt: 160 }, bien: { gt: 150 }, tip: "Estira los brazos arriba" },
+      { id: "line", label: "Cuerpo", measure: "body", stat: "min", excelente: { gt: 165 }, bien: { gt: 155 }, tip: "Mantén el cuerpo recto" },
+      { id: "tempo", label: "Ritmo", stat: "duration", excelente: { gt: 1500 }, bien: { gt: 1000 }, tip: "Más lento y controlado" },
+    ],
     demo: { rig: "pushup", periodMs: 2400, from: { elbow: 172, hipLift: 0 }, to: { elbow: 78, hipLift: -0.01 } },
   },
   {
@@ -59,6 +76,22 @@ export const CALISTHENICS = Object.freeze([
       { id: "lockout", text: "Termina de pie con rodillas estiradas", measure: "knee", stat: "max", gt: 150 },
       { id: "chest", text: "Pecho arriba al bajar", measure: "hip", stat: "min", gt: 50 },
     ],
+    about: {
+      detect: "Tronco erguido mientras rodillas y cadera se doblan juntas.",
+      grade: "Profundidad, terminar de pie, pecho arriba y ritmo.",
+    },
+    recognize: [
+      { feature: "knee", stat: "range", gt: 35, weight: 3 },
+      { feature: "hip", stat: "range", gt: 30, weight: 2, must: true },
+      { feature: "torso", stat: "max", gt: 55, weight: 2, must: true },
+      { feature: "armsUp", stat: "max", lt: 0.5, weight: 1 },
+    ],
+    grade: [
+      { id: "depth", label: "Profundidad", measure: "knee", stat: "min", excelente: { lt: 95 }, bien: { lt: 108 }, tip: "Baja hasta muslos paralelos" },
+      { id: "lockout", label: "De pie", measure: "knee", stat: "max", excelente: { gt: 165 }, bien: { gt: 155 }, tip: "Termina de pie con rodillas estiradas" },
+      { id: "chest", label: "Pecho", measure: "hip", stat: "min", excelente: { gt: 65 }, bien: { gt: 50 }, tip: "Pecho arriba al bajar" },
+      { id: "tempo", label: "Ritmo", stat: "duration", excelente: { gt: 1600 }, bien: { gt: 1000 }, tip: "Más lento y controlado" },
+    ],
     demo: { rig: "standing", periodMs: 2600, from: { knee: 178, hip: 176, shoulder: 15, elbow: 170 }, to: { knee: 82, hip: 80, shoulder: 85, elbow: 172 } },
   },
   {
@@ -81,6 +114,22 @@ export const CALISTHENICS = Object.freeze([
     checks: [
       { id: "chin", text: "Sube la barbilla sobre la barra", measure: "chin", stat: "max", gt: 0 },
       { id: "hang", text: "Baja hasta estirar los brazos", measure: "elbow", stat: "max", gt: 150 },
+    ],
+    about: {
+      detect: "Manos por encima de los hombros mientras los codos se doblan.",
+      grade: "Barbilla sobre la barra, codos doblados arriba, brazos estirados abajo y ritmo.",
+    },
+    recognize: [
+      { feature: "elbow", stat: "range", gt: 35, weight: 3, must: true },
+      { feature: "armsUp", stat: "mean", gt: 0.35, weight: 3, must: true },
+      { feature: "shoulder", stat: "max", gt: 120, weight: 1 },
+      { feature: "torso", stat: "mean", gt: 50, weight: 1 },
+    ],
+    grade: [
+      { id: "chin", label: "Barbilla", measure: "chin", stat: "max", excelente: { gt: 0.05 }, bien: { gt: -0.1 }, tip: "Sube la barbilla sobre la barra" },
+      { id: "top", label: "Arriba", measure: "elbow", stat: "min", excelente: { lt: 60 }, bien: { lt: 72 }, tip: "Sube hasta doblar bien los codos" },
+      { id: "hang", label: "Abajo", measure: "elbow", stat: "max", excelente: { gt: 160 }, bien: { gt: 150 }, tip: "Baja hasta estirar los brazos" },
+      { id: "tempo", label: "Ritmo", stat: "duration", excelente: { gt: 1800 }, bien: { gt: 1200 }, tip: "Más lento y controlado" },
     ],
     demo: { rig: "hanging", periodMs: 2800, from: { elbow: 172 }, to: { elbow: 34 } },
   },
@@ -110,6 +159,22 @@ export const CALISTHENICS = Object.freeze([
       { id: "pike", text: "Baja la cadera", when: { hipLine: { gt: 0.06 } } },
     ],
     checks: [],
+    about: {
+      detect: "Cuerpo horizontal, recto y quieto.",
+      grade: "Cada 5 s: cadera en línea, cuerpo recto y sin moverte.",
+    },
+    recognize: [
+      { feature: "body", stat: "mean", gt: 150, weight: 2, must: true },
+      { feature: "torso", stat: "mean", lt: 40, weight: 2, must: true },
+      { feature: "elbow", stat: "range", lt: 15, weight: 3, must: true },
+      { feature: "knee", stat: "range", lt: 15, weight: 1 },
+      { feature: "armsUp", stat: "mean", lt: 0.2, weight: 1 },
+    ],
+    grade: [
+      { id: "hips", label: "Cadera", measure: "hipLine", stat: "absMax", excelente: { lt: 0.04 }, bien: { lt: 0.08 }, tip: "Cadera en línea con hombros y pies" },
+      { id: "line", label: "Cuerpo", measure: "body", stat: "min", excelente: { gt: 170 }, bien: { gt: 163 }, tip: "Mantén el cuerpo recto" },
+      { id: "still", label: "Quieto", measure: "body", stat: "range", excelente: { lt: 6 }, bien: { lt: 12 }, tip: "Aguanta sin moverte" },
+    ],
     demo: { rig: "plank", periodMs: 9000, profile: "dip", from: { hipLift: 0 }, to: { hipLift: -0.16 } },
   },
 ]);
