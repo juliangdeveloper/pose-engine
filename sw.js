@@ -1,6 +1,6 @@
 const PREFIX = "pose-engine-";
-const CACHE = PREFIX + "v0.2.0";
-const RUNTIME = PREFIX + "runtime-v0.2.0";
+const CACHE = PREFIX + "v0.3.0";
+const RUNTIME = PREFIX + "runtime-v0.3.0";
 const RUNTIME_HOSTS = ["cdn.jsdelivr.net", "storage.googleapis.com"];
 const ASSETS = [
   "./",
@@ -8,19 +8,19 @@ const ASSETS = [
   "./css/styles.css",
   "./js/config.js",
   "./js/meta.js",
+  "./js/library.js",
   "./js/app.js",
-  "./engine/v1/index.js",
-  "./engine/v1/landmarks.js",
-  "./engine/v1/smoothing.js",
-  "./engine/v1/measures.js",
-  "./engine/v1/rules.js",
-  "./engine/v1/synthetic.js",
-  "./engine/v1/detector.js",
-  "./engine/v1/camera.js",
-  "./engine/v1/classifier.js",
-  "./engine/v1/grading.js",
-  "./engine/v1/exercises/calisthenics.js",
-  "./engine/v1/version.txt",
+  "./engine/v2/index.js",
+  "./engine/v2/landmarks.js",
+  "./engine/v2/smoothing.js",
+  "./engine/v2/features.js",
+  "./engine/v2/grading.js",
+  "./engine/v2/matcher.js",
+  "./engine/v2/movements.js",
+  "./engine/v2/capture.js",
+  "./engine/v2/detector.js",
+  "./engine/v2/camera.js",
+  "./engine/v2/version.txt",
   "./manifest.json",
   "./assets/icon.svg",
   "./assets/icon-180.png",
