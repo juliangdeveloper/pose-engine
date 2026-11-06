@@ -9,8 +9,6 @@ export const LANDMARK = Object.freeze({
 
 export const LANDMARK_COUNT = 33;
 
-export const SIDE = Object.freeze({ LEFT: "left", RIGHT: "right", BEST: "best", MEAN: "mean" });
-
 export const CONNECTIONS = Object.freeze([
   ["left_shoulder", "right_shoulder"], ["left_hip", "right_hip"],
   ["left_shoulder", "left_hip"], ["right_shoulder", "right_hip"],
@@ -22,16 +20,3 @@ export const CONNECTIONS = Object.freeze([
   ["right_ankle", "right_heel"], ["right_heel", "right_foot_index"], ["right_ankle", "right_foot_index"],
   ["left_ear", "left_eye"], ["left_eye", "nose"], ["nose", "right_eye"], ["right_eye", "right_ear"],
 ].map(([a, b]) => Object.freeze([LANDMARK[a], LANDMARK[b]])));
-
-export const SIDE_JOINTS = Object.freeze(["shoulder", "elbow", "wrist", "hip", "knee", "ankle"]);
-
-export function landmarkIndex(name, side) {
-  if (Object.prototype.hasOwnProperty.call(LANDMARK, name)) return LANDMARK[name];
-  const key = side + "_" + name;
-  if (Object.prototype.hasOwnProperty.call(LANDMARK, key)) return LANDMARK[key];
-  throw new Error("Punto desconocido: " + name);
-}
-
-export function hasSides(name) {
-  return !Object.prototype.hasOwnProperty.call(LANDMARK, name);
-}
