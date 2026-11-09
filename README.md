@@ -4,7 +4,7 @@
 
 **[▶ Abrir la app](https://juliangdeveloper.github.io/pose-engine/)**
 
-<img src="assets/screenshot.jpg" alt="pose-engine con Flexión completa y Dominada por defecto" width="320">
+<img src="assets/screenshot.jpg" alt="pose-engine con las cuatro poses por defecto: Flexión arriba/abajo y Dominada arriba/abajo" width="320">
 
 ## La app
 - **Por defecto** vienen cuatro poses (Flexión arriba, Flexión abajo, Dominada arriba, Dominada abajo) y dos movimientos: Flexión completa (arriba → abajo → arriba) y Dominada (abajo → arriba → abajo). Si las borras, no vuelven a aparecer.
