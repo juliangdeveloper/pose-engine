@@ -1,5 +1,6 @@
-import { SEGMENT_NAMES, PREVIEW_JOINTS, normalizeSequence } from "../engine/v2/index.js?v=0.3.0";
+import { SEGMENT_NAMES, PREVIEW_JOINTS, normalizeSequence } from "../engine/v2/index.js?v=0.3.1";
 import { LIBRARY_KEY, EXPORT_FORMAT, APP_ID, NAME_MAX, DESCRIPTION_MAX } from "./config.js";
+import { DEFAULTS_SEED_KEY, DEFAULTS_SEED, DEFAULT_POSES, DEFAULT_MOVEMENTS } from "./defaults.js";
 
 const ID_RADIX = 36;
 const ID_RANDOM_LEN = 5;
@@ -59,11 +60,56 @@ function clean(data) {
   return { poses, movements };
 }
 
+function readSeed() {
+  try {
+    const n = Number(localStorage.getItem(DEFAULTS_SEED_KEY));
+    return Number.isFinite(n) ? n : 0;
+  } catch (e) {
+    return 0;
+  }
+}
+
+function writeSeed(n) {
+  try {
+    localStorage.setItem(DEFAULTS_SEED_KEY, String(n));
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+function mergeDefaults(lib) {
+  const poses = lib.poses.slice();
+  DEFAULT_POSES.forEach((p) => {
+    if (poses.some((q) => q.id === p.id)) return;
+    const cleaned = cleanPose(p);
+    if (cleaned) poses.push(cleaned);
+  });
+  const known = new Set(poses.map((p) => p.id));
+  const movements = lib.movements.slice();
+  DEFAULT_MOVEMENTS.forEach((m) => {
+    if (movements.some((q) => q.id === m.id)) return;
+    const cleaned = cleanMove(m, known);
+    if (cleaned) movements.push(cleaned);
+  });
+  return { poses, movements };
+}
+
+function applyDefaults(lib) {
+  if (readSeed() >= DEFAULTS_SEED) return lib;
+  const next = mergeDefaults(lib);
+  try {
+    localStorage.setItem(LIBRARY_KEY, JSON.stringify({ poses: next.poses, movements: next.movements }));
+  } catch (e) {}
+  writeSeed(DEFAULTS_SEED);
+  return next;
+}
+
 export function loadLibrary() {
   try {
-    return clean(JSON.parse(localStorage.getItem(LIBRARY_KEY)));
+    return applyDefaults(clean(JSON.parse(localStorage.getItem(LIBRARY_KEY))));
   } catch (e) {
-    return { poses: [], movements: [] };
+    return applyDefaults({ poses: [], movements: [] });
   }
 }
 

@@ -4,17 +4,18 @@
 
 **[▶ Abrir la app](https://juliangdeveloper.github.io/pose-engine/)**
 
-<img src="assets/screenshot.jpg" alt="pose-engine contando una flexión con las poses Arriba y Abajo, calificada Excelente" width="320">
+<img src="assets/screenshot.jpg" alt="pose-engine con Flexión completa y Dominada por defecto" width="320">
 
 ## La app
+- **Por defecto** vienen cuatro poses (Flexión arriba, Flexión abajo, Dominada arriba, Dominada abajo) y dos movimientos: Flexión completa (arriba → abajo → arriba) y Dominada (abajo → arriba → abajo). Si las borras, no vuelven a aparecer.
 - **Capturar**: haz la pose T (brazos rectos a los lados, a la altura de los hombros). Sale una cuenta de 3 s y, al terminar, se guarda la pose en la que estés. Para capturar otra, baja los brazos y vuelve a hacer la T; **Listo** termina. Si la cámara está apagada, Capturar la enciende.
 - **Poses**: lista de capturas con una figura dibujada a partir de los datos. Toca una para ponerle nombre y descripción o eliminarla. Al eliminarla se quita también de los movimientos.
-- **Movimientos**: crea, edita y elimina movimientos con nombre, descripción y una secuencia de poses capturadas, por ejemplo Flexión = Arriba, Abajo. La secuencia necesita al menos dos poses y no repite la misma seguida.
+- **Movimientos**: crea, edita y elimina movimientos con nombre, descripción y una secuencia de poses capturadas, por ejemplo Flexión completa = Flexión arriba, Flexión abajo. La secuencia necesita al menos dos poses y no repite la misma seguida.
 - En vivo se ve la pose detectada con su porcentaje de cercanía (o la más cercana si ninguna llega), la secuencia del movimiento con el paso actual, el contador y la calificación de la última repetición.
-- Una repetición es pasar por las poses de la secuencia en orden y volver a la primera: Arriba → Abajo → Arriba cuenta una flexión.
+- Una repetición es pasar por las poses de la secuencia en orden y volver a la primera: Flexión arriba → Flexión abajo → Flexión arriba cuenta una Flexión completa.
 - Cada repetición se califica con la cercanía más baja que alcanzaste entre sus poses: **Excelente** desde 85 %, **Bien** desde 75 % y **OK** por debajo.
 - **Copiar datos** copia al portapapeles todas las poses y movimientos en JSON. **Pegar datos** los importa: se agregan, y los que tienen el mismo `id` se reemplazan.
-- Solo se guardan datos en `localStorage` (`pose-engine.library`), nunca fotos ni video.
+- Solo se guardan datos en `localStorage` (`pose-engine.library` y `pose-engine.defaults`), nunca fotos ni video.
 - El icono de cambiar cámara alterna entre frontal y trasera, también antes de encenderla (`pose-engine.camera`). Si hay menos de dos cámaras, se oculta. Solo la frontal se espeja.
 - **0.5× / 1×** amplía el encuadre cuando se puede (zoom mínimo o ultra gran angular) y solo aparece en ese caso (`pose-engine.lens`).
 - ↺ reinicia los contadores de la sesión.
@@ -78,7 +79,7 @@ python3 -m http.server 8000
 
 ## Estado y límites
 - En construcción.
-- Probado en Chromium con emulación de iPhone 13 mini y iPad mini, con esqueletos sintéticos: captura con pose T, flexiones de dos poses, calificación, copiar e importar. Falta probar en Safari de un iPhone real con personas reales.
+- Probado en Chromium con emulación de iPhone 13 mini y iPad mini: poses y movimientos por defecto, captura con pose T, calificación, copiar e importar. Falta calibrar las poses por defecto con personas reales en Safari de iPhone.
 - Los umbrales de cercanía salen de esas pruebas; faltan calibrarlos con personas reales.
 - La gravedad se mide respecto a la cámara: conviene usar el teléfono en la misma posición al capturar y al entrenar.
 
