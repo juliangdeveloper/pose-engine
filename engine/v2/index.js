@@ -1,14 +1,15 @@
 import { LANDMARK, LANDMARK_COUNT, CONNECTIONS } from "./landmarks.js";
 import { createLandmarkSmoother, createOneEuroFilter, SMOOTHING_DEFAULTS } from "./smoothing.js";
-import { poseFeatures, averageFeatures, compareFeatures, isTPose, bodyFrame, SEGMENT, SEGMENT_NAMES, MATCH_TOLERANCE, TPOSE_MAX_DEG, PREVIEW_JOINTS, FEATURES_VERSION } from "./features.js";
+import { poseFeatures, averageFeatures, compareFeatures, upgradeFeatures, isTPose, bodyFrame, SEGMENT, SEGMENT_NAMES, MATCH_TOLERANCE, TPOSE_MAX_DEG, PREVIEW_JOINTS, FEATURES_VERSION } from "./features.js";
 import { gradeFor, GRADE, GRADE_LABEL, GRADE_EXCELENTE_MIN, GRADE_BIEN_MIN } from "./grading.js";
 import { createPoseMatcher, MATCH_DEFAULTS } from "./matcher.js";
 import { createMovementTracker, normalizeSequence, MIN_SEQUENCE } from "./movements.js";
 import { createCaptureFlow, CAPTURE_STATE, CAPTURE_RESULT, CAPTURE_DEFAULTS } from "./capture.js";
+import { createCalibrationFlow, computeCalibration, validCalibration, missingParts, CALIBRATION_STATE, CALIBRATION_RESULT, CALIBRATION_DEFAULTS, CALIBRATION_VERSION, BODY_PART } from "./calibration.js";
 import { createMediaPipeDetector, DELEGATE, MODEL, TASKS_VISION_VERSION } from "./detector.js";
 import { openCamera, closeCamera, retuneLens, readCameraState, emptyCameraState, FACING, LENS, CAMERA_ERROR, CameraError, CAMERA_RELEASE_MS } from "./camera.js";
 
-export const ENGINE_VERSION = "0.3.2";
+export const ENGINE_VERSION = "0.4.0";
 export const SOURCE = Object.freeze({ CAMERA: "camera", VIDEO: "video" });
 export const STATUS = Object.freeze({ LOADING_MODEL: "loading-model", OPENING_CAMERA: "opening-camera", RUNNING: "running", STOPPED: "stopped" });
 export const ENGINE_ERROR = Object.freeze(Object.assign({ MODEL_FAILED: "model-failed", DETECT_FAILED: "detect-failed", NO_VIDEO: "no-video" }, CAMERA_ERROR));
@@ -20,7 +21,9 @@ const MS_PER_S = 1000;
 export { LANDMARK, LANDMARK_COUNT, CONNECTIONS, SMOOTHING_DEFAULTS, DELEGATE, MODEL, TASKS_VISION_VERSION, FACING, LENS };
 export { SEGMENT, SEGMENT_NAMES, MATCH_TOLERANCE, MATCH_DEFAULTS, TPOSE_MAX_DEG, PREVIEW_JOINTS, FEATURES_VERSION, MIN_SEQUENCE };
 export { GRADE, GRADE_LABEL, GRADE_EXCELENTE_MIN, GRADE_BIEN_MIN, CAPTURE_STATE, CAPTURE_RESULT, CAPTURE_DEFAULTS };
-export { poseFeatures, averageFeatures, compareFeatures, isTPose, bodyFrame, gradeFor, normalizeSequence };
+export { CALIBRATION_STATE, CALIBRATION_RESULT, CALIBRATION_DEFAULTS, CALIBRATION_VERSION, BODY_PART };
+export { poseFeatures, averageFeatures, compareFeatures, upgradeFeatures, isTPose, bodyFrame, gradeFor, normalizeSequence };
+export { createCalibrationFlow, computeCalibration, validCalibration, missingParts };
 export { createPoseMatcher, createMovementTracker, createCaptureFlow, createMediaPipeDetector, createOneEuroFilter, createLandmarkSmoother };
 
 function wait(ms) {
@@ -43,6 +46,9 @@ export function createPoseEngine(options) {
   const matcher = createPoseMatcher(o.match);
   const tracker = createMovementTracker();
   const capture = createCaptureFlow(o.capture);
+  const calibrator = createCalibrationFlow(o.calibrationOptions);
+  let calibration = validCalibration(o.calibration) ? o.calibration : null;
+  let lastCalibrationKey = "";
   let poses = [];
   let movements = [];
   let video = o.video || null;
@@ -107,7 +113,7 @@ export function createPoseEngine(options) {
   }
 
   function setPoses(list) {
-    poses = (Array.isArray(list) ? list : []).filter((p) => p && typeof p.id === "string" && p.seg && typeof p.seg === "object");
+    poses = (Array.isArray(list) ? list : []).filter((p) => p && typeof p.id === "string" && p.seg && typeof p.seg === "object").map(upgradeFeatures);
     matcher.setPoses(poses);
     tracker.setMovements(movements, poses.map((p) => p.id));
     return poses.length;
@@ -127,6 +133,10 @@ export function createPoseEngine(options) {
     return s.state + ":" + s.seconds;
   }
 
+  function calibrationKey(s) {
+    return s.state + ":" + Math.round(s.progress * 20) + ":" + s.missing.join(",");
+  }
+
   function process(result, t, width, height) {
     if (lastT !== null) {
       const dt = t - lastT;
@@ -144,7 +154,14 @@ export function createPoseEngine(options) {
       worldSmoother.reset();
     }
     const mirrored = mirroredNow();
-    const features = landmarks ? poseFeatures(landmarks, world, { mirrored }) : null;
+    const features = landmarks ? poseFeatures(landmarks, world, { mirrored, calibration }) : null;
+    const cal = calibrator.update(features, landmarks, world, t);
+    if (cal.result) calibration = cal.result.calibration;
+    const calKey = calibrationKey(cal.snapshot);
+    if (calKey !== lastCalibrationKey || cal.result) {
+      lastCalibrationKey = calKey;
+      emit("calibration", Object.assign({}, cal.snapshot, { result: cal.result ? cal.result.type : null, calibration: cal.result ? cal.result.calibration : null }));
+    }
     const cap = capture.update(features, t);
     const key = captureKey(cap.snapshot);
     if (key !== lastCaptureKey || cap.result) {
@@ -155,13 +172,13 @@ export function createPoseEngine(options) {
     if (match.left) emit("pose", Object.assign({ type: POSE_EVENT.LEAVE }, match.left));
     if (match.entered) {
       emit("pose", Object.assign({ type: POSE_EVENT.ENTER }, match.entered));
-      if (!capture.active()) tracker.enter(match.entered.id, match.entered.proximity, t).reps.forEach((r) => emit("rep", r));
+      if (!capture.active() && !calibrator.active()) tracker.enter(match.entered.id, match.entered.proximity, t).reps.forEach((r) => emit("rep", r));
     }
     if (match.active) tracker.track(match.active.id, match.active.proximity);
     lastFrame = {
       t, width, height, source, delegate, fps, mirrored, landmarks, worldLandmarks: world, features,
       tpose: isTPose(features), proximity: match.proximity, best: match.best, active: match.active,
-      movements: tracker.snapshot(), capture: cap.snapshot,
+      movements: tracker.snapshot(), capture: cap.snapshot, calibration: cal.snapshot, calibrated: !!calibration,
     };
     emit("frame", lastFrame);
     return lastFrame;
@@ -251,6 +268,7 @@ export function createPoseEngine(options) {
     if (stream) { closeCamera(video, stream); stream = null; }
     clearCameraReadout();
     if (capture.active()) cancelCapture();
+    if (calibrator.active()) cancelCalibration();
     if (was && !silent) emit("status", { state: STATUS.STOPPED, source });
   }
 
@@ -296,9 +314,27 @@ export function createPoseEngine(options) {
     return getState();
   }
 
-  function startCapture() {
-    capture.start();
+  function startCapture(captureOptions) {
+    if (calibrator.active()) cancelCalibration();
+    capture.start(captureOptions);
     lastCaptureKey = "";
+  }
+
+  function startCalibration() {
+    if (capture.active()) cancelCapture();
+    calibrator.start();
+    lastCalibrationKey = "";
+  }
+
+  function cancelCalibration() {
+    calibrator.cancel();
+    lastCalibrationKey = "";
+    emit("calibration", { state: CALIBRATION_STATE.IDLE, progress: 0, missing: [], result: null, calibration: null });
+  }
+
+  function setCalibration(next) {
+    calibration = validCalibration(next) ? next : null;
+    return calibration;
   }
 
   function cancelCapture() {
@@ -314,8 +350,9 @@ export function createPoseEngine(options) {
 
   function getState() {
     return {
-      running, source, delegate, facingMode: facing, fps, zoom, lens, capabilities,
+      running, source, delegate, facingMode: facing, fps, zoom, lens, capabilities, deviceId: videoDeviceId(stream),
       poses: poses.length, movements: tracker.snapshot(), active: matcher.active(), capturing: capture.active(),
+      calibrating: calibrator.active(), calibration,
     };
   }
 
@@ -335,8 +372,10 @@ export function createPoseEngine(options) {
 
   return {
     on, off, start, stop, reset, feed, destroy, switchCamera, setLens, getState,
-    setPoses, setMovements, startCapture, cancelCapture,
+    setPoses, setMovements, startCapture, cancelCapture, startCalibration, cancelCalibration, setCalibration,
     capturing: () => capture.active(),
+    calibrating: () => calibrator.active(),
+    getCalibration: () => calibration,
     lastFrame: () => lastFrame,
   };
 }

@@ -59,6 +59,8 @@ button { font: inherit; color: inherit; }
 .bar-title { margin: 0; font-weight: 700; font-size: 17px; letter-spacing: 0.2px; }
 .bar-end { display: flex; align-items: center; gap: 10px; }
 .bar-version { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.pill-btn { height: 30px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel); font-size: 13px; font-weight: 600; cursor: pointer; }
+.pill-btn.on { border-color: var(--accent); color: var(--accent); }
 
 .icon-btn {
   width: 30px;

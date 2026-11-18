@@ -1,6 +1,6 @@
 import { LANDMARK } from "./landmarks.js";
 
-export const FEATURES_VERSION = 1;
+export const FEATURES_VERSION = 2;
 export const SEGMENT = Object.freeze({
   LEFT_UPPER_ARM: "leftUpperArm",
   LEFT_FOREARM: "leftForearm",
@@ -31,6 +31,8 @@ const LIMBS = Object.freeze([
   [SEGMENT.RIGHT_SHIN, "right_knee", "right_ankle"],
 ]);
 const TORSO = Object.freeze(["left_shoulder", "right_shoulder", "left_hip", "right_hip"]);
+export const LIMB_SEGMENTS = Object.freeze(LIMBS.map(([name, a, b]) => Object.freeze([name, LANDMARK[a], LANDMARK[b]])));
+export const DEPTH_GAIN_MAX = 2.5;
 const GRAVITY_DOWN = Object.freeze({ x: 0, y: 1, z: 0 });
 const LEFT_OUT = Object.freeze([-1, 0, 0]);
 const RIGHT_OUT = Object.freeze([1, 0, 0]);
@@ -77,12 +79,59 @@ function round(v) {
   return Math.round(v * ROUND) / ROUND;
 }
 
-function pointsOf(landmarks, world) {
-  if (world && TORSO.every((n) => finite(world[LANDMARK[n]]))) return world;
-  return landmarks;
+function hasWorld(world) {
+  return !!world && TORSO.every((n) => finite(world[LANDMARK[n]]));
 }
 
-export function bodyFrame(points) {
+function vec(a) {
+  return Array.isArray(a) && a.length === 3 && a.every(isFinite) ? unit({ x: a[0], y: a[1], z: a[2] }) : null;
+}
+
+function deepen(d, len) {
+  if (!(len > 0)) return d;
+  const z = d.z || 0;
+  const need = len * len - d.x * d.x - d.y * d.y;
+  if (need <= z * z) return d;
+  const gain = Math.min(DEPTH_GAIN_MAX, Math.sqrt(need) / Math.max(Math.abs(z), EPS));
+  return { x: d.x, y: d.y, z: z * gain };
+}
+
+function correct(points, cal) {
+  const body = cal.body || {};
+  const len = cal.len || {};
+  const out = points.slice();
+  const at = (q) => ({ x: q.x, y: q.y, z: q.z || 0 });
+  const P = (n) => at(points[LANDMARK[n]]);
+  const set = (n, q) => { out[LANDMARK[n]] = Object.assign({}, points[LANDMARK[n]], q); };
+  const midHip = scale(add(P("left_hip"), P("right_hip")), 0.5);
+  const midShoulder = scale(add(P("left_shoulder"), P("right_shoulder")), 0.5);
+  const halfHip = deepen(scale(sub(P("right_hip"), P("left_hip")), 0.5), body.hipWidth / 2);
+  set("right_hip", add(midHip, halfHip));
+  set("left_hip", sub(midHip, halfHip));
+  const shoulderMid = add(midHip, deepen(sub(midShoulder, midHip), body.torso));
+  const halfShoulder = deepen(scale(sub(P("right_shoulder"), P("left_shoulder")), 0.5), body.shoulderWidth / 2);
+  set("right_shoulder", add(shoulderMid, halfShoulder));
+  set("left_shoulder", sub(shoulderMid, halfShoulder));
+  LIMBS.forEach(([name, a, b]) => {
+    const pa = out[LANDMARK[a]];
+    if (!finite(pa) || !finite(points[LANDMARK[a]]) || !finite(points[LANDMARK[b]])) return;
+    set(b, add(at(pa), deepen(sub(P(b), P(a)), len[name])));
+  });
+  return out;
+}
+
+export function upgradeFeatures(f) {
+  if (!f || !f.seg || typeof f.seg !== "object") return f;
+  if (typeof f.v === "number" && f.v >= FEATURES_VERSION) return f;
+  const seg = {};
+  Object.keys(f.seg).forEach((name) => {
+    const d = f.seg[name];
+    seg[name] = Array.isArray(d) && d.length === 3 ? [d[0], d[1], d[2] === 0 ? 0 : -d[2]] : d;
+  });
+  return Object.assign({}, f, { v: FEATURES_VERSION, seg });
+}
+
+export function bodyFrame(points, chirality) {
   if (!points || !TORSO.every((n) => finite(points[LANDMARK[n]]))) return null;
   const p = (n) => Object.assign({ z: 0 }, points[LANDMARK[n]]);
   const midShoulder = scale(add(p("left_shoulder"), p("right_shoulder")), 0.5);
@@ -92,7 +141,8 @@ export function bodyFrame(points) {
   if (!up || !across) return null;
   const right = unit(sub(across, scale(up, dot(across, up))));
   if (!right) return null;
-  return { up, right, forward: cross(right, up) };
+  const forward = cross(up, right);
+  return { up, right, forward: chirality < 0 ? scale(forward, -1) : forward };
 }
 
 function local(frame, d) {
@@ -119,20 +169,23 @@ function preview(landmarks, mirrored) {
 
 export function poseFeatures(landmarks, world, options) {
   if (!landmarks) return null;
-  const points = pointsOf(landmarks, world);
-  const frame = bodyFrame(points);
+  const metric = hasWorld(world);
+  const cal = options && options.calibration;
+  const points = metric ? (cal && cal.len ? correct(world, cal) : world) : landmarks;
+  const frame = bodyFrame(points, cal && cal.chirality);
   if (!frame) return null;
   const seg = {};
   const visOut = {};
   LIMBS.forEach(([name, a, b]) => {
     const pa = points[LANDMARK[a]];
     const pb = points[LANDMARK[b]];
-    const d = finite(pa) && finite(pb) ? unit(sub(pb, pa)) : null;
+    if (!finite(pa) || !finite(pb)) return;
+    const d = unit(sub(pb, pa));
     if (!d) return;
     seg[name] = local(frame, d);
     visOut[name] = Math.min(vis(landmarks[LANDMARK[a]]), vis(landmarks[LANDMARK[b]]));
   });
-  seg[SEGMENT.GRAVITY] = local(frame, GRAVITY_DOWN);
+  seg[SEGMENT.GRAVITY] = local(frame, (cal && vec(cal.down)) || GRAVITY_DOWN);
   visOut[SEGMENT.GRAVITY] = Math.min.apply(null, TORSO.map((n) => vis(landmarks[LANDMARK[n]])));
   return { v: FEATURES_VERSION, seg, vis: visOut, pts: preview(landmarks, !!(options && options.mirrored)) };
 }

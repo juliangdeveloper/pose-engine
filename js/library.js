@@ -1,4 +1,4 @@
-import { SEGMENT_NAMES, PREVIEW_JOINTS, normalizeSequence } from "../engine/v2/index.js?v=0.3.2";
+import { SEGMENT_NAMES, PREVIEW_JOINTS, FEATURES_VERSION, normalizeSequence, upgradeFeatures } from "../engine/v2/index.js?v=0.4.0";
 import { LIBRARY_KEY, EXPORT_FORMAT, APP_ID, NAME_MAX, DESCRIPTION_MAX } from "./config.js";
 import { DEFAULTS_SEED_KEY, DEFAULTS_SEED, DEFAULT_POSES, DEFAULT_MOVEMENTS } from "./defaults.js";
 
@@ -19,8 +19,9 @@ function finiteList(v, len) {
   return Array.isArray(v) && v.length === len && v.every((n) => typeof n === "number" && isFinite(n));
 }
 
-function cleanPose(p) {
-  if (!p || typeof p !== "object" || !p.seg || typeof p.seg !== "object") return null;
+function cleanPose(raw) {
+  if (!raw || typeof raw !== "object" || !raw.seg || typeof raw.seg !== "object") return null;
+  const p = upgradeFeatures(Object.assign({}, raw, { v: typeof raw.v === "number" ? raw.v : 1 }));
   const seg = {};
   const vis = {};
   SEGMENT_NAMES.forEach((name) => {
@@ -37,7 +38,7 @@ function cleanPose(p) {
     name: name || "Pose",
     description: text(p.description, DESCRIPTION_MAX),
     createdAt: typeof p.createdAt === "string" ? p.createdAt : new Date().toISOString(),
-    v: typeof p.v === "number" ? p.v : 1,
+    v: FEATURES_VERSION,
     seg, vis, pts,
   };
 }
@@ -95,9 +96,19 @@ function mergeDefaults(lib) {
   return { poses, movements };
 }
 
+function refreshDefaults(lib) {
+  const poses = lib.poses.map((p) => {
+    const d = DEFAULT_POSES.find((q) => q.id === p.id);
+    const cleaned = d ? cleanPose(d) : null;
+    return cleaned ? Object.assign({}, p, { v: cleaned.v, seg: cleaned.seg, vis: cleaned.vis, pts: cleaned.pts }) : p;
+  });
+  return { poses, movements: lib.movements };
+}
+
 function applyDefaults(lib) {
-  if (readSeed() >= DEFAULTS_SEED) return lib;
-  const next = mergeDefaults(lib);
+  const seed = readSeed();
+  if (seed >= DEFAULTS_SEED) return lib;
+  const next = seed > 0 ? refreshDefaults(lib) : mergeDefaults(lib);
   try {
     localStorage.setItem(LIBRARY_KEY, JSON.stringify({ poses: next.poses, movements: next.movements }));
   } catch (e) {}

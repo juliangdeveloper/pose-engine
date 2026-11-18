@@ -16,14 +16,15 @@
   <title>Pose Engine</title>
   <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="assets/icon-180.png">
-  <link rel="manifest" href="manifest.json?v=0.3.2">
-  <link rel="stylesheet" href="css/styles.css?v=0.3.2">
+  <link rel="manifest" href="manifest.json?v=0.4.0">
+  <link rel="stylesheet" href="css/styles.css?v=0.4.0">
 </head>
 <body>
   <header class="bar">
     <p class="bar-title">Pose Engine</p>
     <div class="bar-end">
       <span class="bar-version" id="bar-version"></span>
+      <button class="pill-btn" type="button" id="btn-calibrate" aria-pressed="false">Calibrar</button>
       <button class="icon-btn" type="button" id="btn-info" aria-label="Información">i</button>
     </div>
   </header>
@@ -102,6 +103,7 @@
     <form method="dialog" class="sheet-body">
       <h2>Pose Engine</h2>
       <p>La cámara se procesa en tu dispositivo. Solo se guardan los datos de tus poses, nunca fotos ni video.</p>
+      <p>Al abrir la cámara por primera vez haz la pose T, quieto, con todo el cuerpo a la vista: la app mide tus proporciones y cómo está puesta la cámara para comparar las poses igual desde cualquier ángulo. Si cambias de cámara o de lugar, pulsa Calibrar.</p>
       <p>Para capturar una pose pulsa Capturar y haz la pose T. Tras la cuenta de 3 segundos se guarda la pose en la que estés.</p>
       <p>Un movimiento es una secuencia de poses. Cada vez que la completas suma una repetición, calificada Excelente, Bien u OK según qué tan cerca llegaste a cada pose.</p>
       <p class="tenue" id="info-version"></p>
@@ -131,6 +133,6 @@
     </div>
   </dialog>
 
-  <script type="module" src="js/app.js?v=0.3.2"></script>
+  <script type="module" src="js/app.js?v=0.4.0"></script>
 </body>
 </html>

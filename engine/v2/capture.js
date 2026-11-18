@@ -19,9 +19,9 @@ export function createCaptureFlow(options) {
     return { state, remainingMs, seconds: Math.ceil(remainingMs / MS_PER_S), holdProgress, needsRelease };
   }
 
-  function start() {
+  function start(startOptions) {
     state = CAPTURE_STATE.WAITING;
-    needsRelease = false;
+    needsRelease = !!(startOptions && startOptions.needsRelease);
     buffer = [];
   }
 

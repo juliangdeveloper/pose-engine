@@ -1,6 +1,6 @@
-import { createPoseEngine, CONNECTIONS, LANDMARK, SOURCE, STATUS, FACING, LENS, CAPTURE_STATE, CAPTURE_RESULT, PREVIEW_JOINTS, POSE_EVENT, gradeFor, normalizeSequence } from "../engine/v2/index.js?v=0.3.2";
+import { createPoseEngine, CONNECTIONS, LANDMARK, SOURCE, STATUS, FACING, LENS, CAPTURE_STATE, CAPTURE_RESULT, CALIBRATION_STATE, CALIBRATION_RESULT, PREVIEW_JOINTS, POSE_EVENT, gradeFor, normalizeSequence, validCalibration } from "../engine/v2/index.js?v=0.4.0";
 import {
-  APP_ID, APP_VERSION, CAMERA_KEY, LENS_KEY, STATS_KEY, STAT, STATS, JOINT_RADIUS_PX, BONE_WIDTH_PX, THUMB_BONE_PX, THUMB_JOINT_PX,
+  APP_ID, APP_VERSION, CAMERA_KEY, LENS_KEY, CALIBRATION_KEY, CALIBRATION_MAX, STATS_KEY, STAT, STATS, JOINT_RADIUS_PX, BONE_WIDTH_PX, THUMB_BONE_PX, THUMB_JOINT_PX,
   MIN_JOINT_VISIBILITY, MAX_DPR, PERCENT, COLOR, TEXT, POP_GRADE_MS, STATUS_MS, CAPTURED_MS, CONFIRM_MS, NAME_MAX, DESCRIPTION_MAX,
 } from "./config.js";
 import { loadLibrary, saveLibrary, exportLibrary, parseImport, mergeLibrary, newId, nextName, playable } from "./library.js";
@@ -35,7 +35,7 @@ const ui = {
   banner: $("capture-banner"), bannerTitle: $("capture-title"), bannerHint: $("capture-hint"), bannerHold: $("capture-hold"),
   countdown: $("countdown"), posesBtn: $("btn-poses"), movesBtn: $("btn-moves"), posesCount: $("poses-count"), movesCount: $("moves-count"),
   lib: $("lib"), libMain: $("lib-main"), libFoot: $("lib-foot"), libStatus: $("lib-status"), libClose: $("lib-close"),
-  tabPoses: $("tab-poses"), tabMoves: $("tab-moves"), copy: $("btn-copy"), paste: $("btn-paste"),
+  tabPoses: $("tab-poses"), tabMoves: $("tab-moves"), copy: $("btn-copy"), paste: $("btn-paste"), calibrate: $("btn-calibrate"),
 };
 
 function readKey(key, allowed, fallback) {
@@ -71,6 +71,8 @@ let busy = false;
 let lastRep = null;
 let focusId = null;
 let capturedNote = null;
+let calibrationNote = null;
+let pendingCapture = false;
 let view = VIEW.POSES;
 let editing = null;
 let statusTimer = 0;
@@ -186,7 +188,7 @@ function renderHud(frame) {
   ui.counterSub.dataset.level = sub ? sub.level : "";
   renderSeq(move);
   let hint = "";
-  if (engine.capturing()) hint = "";
+  if (engine.capturing() || engine.calibrating()) hint = "";
   else if (!library.poses.length) hint = TEXT.firstPose;
   else if (!move) hint = TEXT.firstMove;
   ui.hint.textContent = hint;
@@ -216,7 +218,91 @@ function renderHud(frame) {
   ui.meter.dataset.state = state;
 }
 
+function readCalibrations() {
+  try {
+    const all = JSON.parse(localStorage.getItem(CALIBRATION_KEY));
+    return all && typeof all === "object" && !Array.isArray(all) ? all : {};
+  } catch (e) {
+    return {};
+  }
+}
+
+function cameraKey() {
+  const state = engine.getState();
+  return state.facingMode + ":" + (state.deviceId || "");
+}
+
+function storeCalibration(calibration) {
+  const all = readCalibrations();
+  all[cameraKey()] = Object.assign({}, calibration, { at: new Date().toISOString() });
+  const keys = Object.keys(all).sort((a, b) => String(all[b].at).localeCompare(String(all[a].at)));
+  const kept = {};
+  keys.slice(0, CALIBRATION_MAX).forEach((k) => { kept[k] = all[k]; });
+  writeKey(CALIBRATION_KEY, JSON.stringify(kept));
+}
+
+function applyCalibration() {
+  if (source !== SOURCE.CAMERA) return;
+  const saved = readCalibrations()[cameraKey()];
+  if (validCalibration(saved)) {
+    engine.setCalibration(saved);
+    return;
+  }
+  engine.setCalibration(null);
+  startCalibration();
+}
+
+function startCalibration() {
+  calibrationNote = null;
+  capturedNote = null;
+  if (engine.capturing()) pendingCapture = true;
+  engine.startCalibration();
+  renderCalibrationButton();
+  renderCapture(null);
+}
+
+function finishPendingCapture(needsRelease) {
+  if (!pendingCapture) return;
+  pendingCapture = false;
+  engine.startCapture({ needsRelease });
+}
+
+function renderCalibrationButton() {
+  const on = engine.calibrating();
+  ui.calibrate.textContent = on ? TEXT.calibrateSkip : TEXT.calibrate;
+  ui.calibrate.classList.toggle("on", on);
+  ui.calibrate.setAttribute("aria-pressed", String(on));
+}
+
+function renderCalibration(cal) {
+  const now = performance.now();
+  const note = calibrationNote && now - calibrationNote.at < CAPTURED_MS ? calibrationNote : null;
+  const active = engine.calibrating();
+  if (!active && !note) return false;
+  const pending = pendingCapture || engine.capturing();
+  ui.capture.textContent = pending ? TEXT.captureDone : TEXT.capture;
+  ui.capture.setAttribute("aria-pressed", String(pending));
+  ui.capture.classList.toggle("on", pending);
+  ui.banner.hidden = false;
+  ui.countdown.hidden = true;
+  if (!active) {
+    ui.banner.dataset.state = "done";
+    ui.bannerTitle.textContent = note.title;
+    ui.bannerHint.textContent = note.hint;
+    ui.bannerHold.style.transform = "scaleX(0)";
+    return true;
+  }
+  const c = cal || { state: CALIBRATION_STATE.WAITING, progress: 0, missing: [] };
+  const holding = c.state === CALIBRATION_STATE.HOLDING;
+  ui.banner.dataset.state = holding ? "holding" : "waiting";
+  ui.bannerHold.style.transform = "scaleX(" + (holding ? c.progress : 0).toFixed(3) + ")";
+  ui.bannerTitle.textContent = holding ? TEXT.calHold : TEXT.calWait;
+  ui.bannerHint.textContent = c.missing && c.missing.length ? TEXT.missing(c.missing) : holding ? TEXT.calHoldHint : TEXT.calWaitHint;
+  return true;
+}
+
 function renderCapture(c) {
+  if (renderCalibration(lastFrame && lastFrame.calibration)) return;
   const active = c && c.state !== CAPTURE_STATE.IDLE;
   ui.capture.textContent = active ? TEXT.captureDone : TEXT.capture;
   ui.capture.setAttribute("aria-pressed", String(!!active));
@@ -246,7 +332,7 @@ function renderCapture(c) {
     ui.bannerHint.textContent = c.needsRelease ? TEXT.releaseT : TEXT.waitTNext;
     ui.banner.dataset.state = note.ok ? "done" : "failed";
   } else {
-    ui.bannerTitle.textContent = c.needsRelease ? TEXT.releaseT : TEXT.waitT;
+    ui.bannerTitle.textContent = c.needsRelease ? (capturedNote ? TEXT.releaseT : TEXT.releaseFirst) : TEXT.waitT;
     ui.bannerHint.textContent = TEXT.waitTHint;
   }
 }
@@ -384,6 +470,7 @@ async function startCamera() {
     setRunning(true, SOURCE.CAMERA);
     hideMessage();
     refreshCameras();
+    applyCalibration();
     return true;
   } catch (e) {
     setRunning(false);
@@ -396,7 +483,10 @@ async function startCamera() {
 }
 
 function stopAll() {
+  pendingCapture = false;
+  calibrationNote = null;
   engine.stop();
+  renderCalibrationButton();
   setRunning(false);
   lastFrame = null;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -435,6 +525,17 @@ engine.on("capture", (c) => {
   renderCapture(c);
 });
 
+engine.on("calibration", (c) => {
+  if (c.result === CALIBRATION_RESULT.CALIBRATED && c.calibration) {
+    storeCalibration(c.calibration);
+    const missing = c.calibration.missing || [];
+    calibrationNote = { at: performance.now(), title: TEXT.calDone, hint: missing.length ? TEXT.missing(missing) + ". " + TEXT.calPartial : "" };
+    finishPendingCapture(true);
+  }
+  renderCalibrationButton();
+  renderCapture(lastFrame && lastFrame.capture);
+});
+
 engine.on("pose", (p) => {
   if (p.type === POSE_EVENT.ENTER) restart(ui.poseName, "flash");
 });
@@ -463,12 +564,22 @@ ui.camera.addEventListener("click", () => {
 });
 
 ui.capture.addEventListener("click", async () => {
+  if (pendingCapture) {
+    pendingCapture = false;
+    renderCapture(null);
+    return;
+  }
   if (engine.capturing()) {
     engine.cancelCapture();
     return;
   }
   capturedNote = null;
   if (!running && !(await startCamera())) return;
+  if (engine.calibrating()) {
+    pendingCapture = true;
+    renderCapture(null);
+    return;
+  }
   engine.startCapture();
   renderCapture({ state: CAPTURE_STATE.WAITING, needsRelease: false, holdProgress: 0, seconds: 0 });
 });
@@ -496,12 +607,28 @@ ui.flip.addEventListener("click", async () => {
     const facing = await engine.switchCamera();
     writeKey(CAMERA_KEY, facing);
     renderCameraChrome();
+    if (running) applyCalibration();
   } catch (e) {
     setRunning(false);
     showMessage(TEXT.errors[e.code] || TEXT.errors["camera-error"], "");
   } finally {
     busy = false;
   }
+});
+
+ui.calibrate.addEventListener("click", async () => {
+  if (engine.calibrating()) {
+    engine.cancelCalibration();
+    renderCalibrationButton();
+    finishPendingCapture(false);
+    renderCapture(lastFrame && lastFrame.capture);
+    return;
+  }
+  if (!running || source !== SOURCE.CAMERA) {
+    if (!(await startCamera())) return;
+    if (engine.calibrating()) return;
+  }
+  startCalibration();
 });
 
 ui.reset.addEventListener("click", () => {

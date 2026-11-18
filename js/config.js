@@ -1,9 +1,11 @@
 export const APP_ID = "pose-engine";
-export const APP_VERSION = "0.3.2";
+export const APP_VERSION = "0.4.0";
 export const STATS_KEY = "pose-engine.stats";
 export const CAMERA_KEY = "pose-engine.camera";
 export const LENS_KEY = "pose-engine.lens";
 export const LIBRARY_KEY = "pose-engine.library";
+export const CALIBRATION_KEY = "pose-engine.calibration";
+export const CALIBRATION_MAX = 6;
 export const EXPORT_FORMAT = 1;
 
 export const STAT = Object.freeze({ REPS_TOTAL: "reps_total", CAPTURES_TOTAL: "capturas_total" });
@@ -54,6 +56,26 @@ export const TEXT = Object.freeze({
   waitTHint: "Brazos rectos a los lados, a la altura de los hombros",
   waitTNext: "Haz la pose T para capturar otra",
   releaseT: "Baja los brazos para capturar otra",
+  releaseFirst: "Baja los brazos y haz la pose T para capturar",
+  calibrate: "Calibrar",
+  calibrateSkip: "Omitir",
+  calWait: "Haz la pose T para calibrar",
+  calWaitHint: "Brazos rectos a los lados, todo el cuerpo a la vista",
+  calHold: "Quieto en la pose T",
+  calHoldHint: "Midiendo tu cuerpo",
+  calDone: "Calibrado",
+  calPartial: "Se comparan solo las partes que se ven",
+  missing: (parts) => {
+    const word = { leftArm: "tu brazo izquierdo", rightArm: "tu brazo derecho", leftLeg: "tu pierna izquierda", rightLeg: "tu pierna derecha" };
+    const has = (p) => parts.indexOf(p) !== -1;
+    const list = [];
+    if (has("leftArm") && has("rightArm")) list.push("tus brazos");
+    else ["leftArm", "rightArm"].forEach((p) => { if (has(p)) list.push(word[p]); });
+    if (has("leftLeg") && has("rightLeg")) list.push("tus piernas");
+    else ["leftLeg", "rightLeg"].forEach((p) => { if (has(p)) list.push(word[p]); });
+    const plural = list.length > 1 || /^tus /.test(list[0] || "");
+    return (plural ? "No se ven " : "No se ve ") + list.join(" ni ");
+  },
   holdT: "Mantén la pose T",
   countdown: "Ponte en la pose",
   captured: "guardada",
