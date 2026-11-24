@@ -15,6 +15,8 @@ export const SEGMENT = Object.freeze({
 export const SEGMENT_NAMES = Object.freeze(Object.values(SEGMENT));
 export const MATCH_TOLERANCE = Object.freeze({ rmsDeg: 60, minShared: 3, minSharedRatio: 0.5, minVisibility: 0.5 });
 export const TPOSE_MAX_DEG = 28;
+export const METRIC = Object.freeze({ WRIST_UP_LEFT: "wristUpLeft", WRIST_UP_RIGHT: "wristUpRight", TWIST: "twist", SHOULDER_DROP: "shoulderDrop" });
+export const CHECK_MARGIN = 0.3;
 export const PREVIEW_JOINTS = Object.freeze([
   "nose", "left_shoulder", "right_shoulder", "left_elbow", "right_elbow", "left_wrist", "right_wrist",
   "left_hip", "right_hip", "left_knee", "right_knee", "left_ankle", "right_ankle",
@@ -69,6 +71,21 @@ function cross(a, b) {
 function unit(a) {
   const n = Math.hypot(a.x, a.y, a.z);
   return n > EPS ? scale(a, 1 / n) : null;
+}
+
+function dist(a, b) {
+  return Math.hypot(a.x - b.x, a.y - b.y, (a.z || 0) - (b.z || 0));
+}
+
+function clamp01(v) {
+  return v < 0 ? 0 : v > 1 ? 1 : v;
+}
+
+function angleBetween(a, b) {
+  const ua = unit(a);
+  const ub = unit(b);
+  if (!ua || !ub) return null;
+  return Math.acos(Math.min(1, Math.max(-1, dot(ua, ub)))) * RAD_TO_DEG;
 }
 
 function finite(p) {
@@ -149,6 +166,37 @@ function local(frame, d) {
   return [dot(d, frame.right), dot(d, frame.up), dot(d, frame.forward)];
 }
 
+function bodyMetrics(points, landmarks, frame, cal) {
+  const out = {};
+  const down = unit((cal && vec(cal.down)) || GRAVITY_DOWN);
+  const up = scale(down, -1);
+  const P = (n) => points[LANDMARK[n]];
+  const midShoulder = scale(add(P("left_shoulder"), P("right_shoulder")), 0.5);
+  const midHip = scale(add(P("left_hip"), P("right_hip")), 0.5);
+  const torsoM = (cal && cal.body && cal.body.torso) || dist(midShoulder, midHip) || 1;
+  const seen = (n) => vis(landmarks[LANDMARK[n]]) >= MATCH_TOLERANCE.minVisibility;
+  if (seen("left_wrist") && seen("left_shoulder") && seen("right_shoulder")) {
+    out[METRIC.WRIST_UP_LEFT] = dot(sub(P("left_wrist"), midShoulder), up) / torsoM;
+  }
+  if (seen("right_wrist") && seen("left_shoulder") && seen("right_shoulder")) {
+    out[METRIC.WRIST_UP_RIGHT] = dot(sub(P("right_wrist"), midShoulder), up) / torsoM;
+  }
+  if (TORSO.every(seen)) {
+    const sh = sub(P("right_shoulder"), P("left_shoulder"));
+    const hp = sub(P("right_hip"), P("left_hip"));
+    const shT = sub(sh, scale(frame.up, dot(sh, frame.up)));
+    const hpT = sub(hp, scale(frame.up, dot(hp, frame.up)));
+    const twist = angleBetween(shT, hpT);
+    if (twist !== null) out[METRIC.TWIST] = twist;
+  }
+  const calH = cal && cal.body ? (cal.body.shoulderHeight || ((cal.len && cal.len.leftThigh || 0) + (cal.len && cal.len.leftShin || 0) + (cal.body.torso || 0))) : 0;
+  if (calH > 0 && seen("left_ankle") && seen("right_ankle") && seen("left_shoulder") && seen("right_shoulder")) {
+    const midAnkle = scale(add(P("left_ankle"), P("right_ankle")), 0.5);
+    out[METRIC.SHOULDER_DROP] = (calH - dot(sub(midShoulder, midAnkle), up)) / torsoM;
+  }
+  return out;
+}
+
 function preview(landmarks, mirrored) {
   const pts = PREVIEW_JOINTS.map((n) => {
     const q = landmarks[LANDMARK[n]];
@@ -187,7 +235,7 @@ export function poseFeatures(landmarks, world, options) {
   });
   seg[SEGMENT.GRAVITY] = local(frame, (cal && vec(cal.down)) || GRAVITY_DOWN);
   visOut[SEGMENT.GRAVITY] = Math.min.apply(null, TORSO.map((n) => vis(landmarks[LANDMARK[n]])));
-  return { v: FEATURES_VERSION, seg, vis: visOut, pts: preview(landmarks, !!(options && options.mirrored)) };
+  return { v: FEATURES_VERSION, seg, vis: visOut, pts: preview(landmarks, !!(options && options.mirrored)), metrics: metric ? bodyMetrics(points, landmarks, frame, cal) : null };
 }
 
 export function averageFeatures(list) {
@@ -217,8 +265,48 @@ function usableSegment(f, name, minVis) {
   return Array.isArray(d) && d.length === 3 && (f.vis && typeof f.vis[name] === "number" ? f.vis[name] : 1) >= minVis;
 }
 
-export function compareFeatures(current, target, tolerance) {
-  const tol = Object.assign({}, MATCH_TOLERANCE, tolerance);
+function checkScore(check, metrics) {
+  if (!check || typeof check.m !== "string") return null;
+  const v = metrics ? metrics[check.m] : undefined;
+  if (typeof v !== "number" || !isFinite(v)) return null;
+  let score = 1;
+  if (typeof check.min === "number") {
+    const m = Math.max(Math.abs(check.min) * CHECK_MARGIN, EPS);
+    score = Math.min(score, clamp01((v - check.min + m) / m));
+  }
+  if (typeof check.max === "number") {
+    const m = Math.max(Math.abs(check.max) * CHECK_MARGIN, EPS);
+    score = Math.min(score, clamp01((check.max + m - v) / m));
+  }
+  return score;
+}
+
+function swapSide(name) {
+  return /^left/.test(name) ? name.replace(/^left/, "right") : /^right/.test(name) ? name.replace(/^right/, "left") : name;
+}
+
+function mirrorTarget(target) {
+  const seg = {};
+  Object.keys(target.seg || {}).forEach((name) => {
+    const d = target.seg[name];
+    seg[swapSide(name)] = Array.isArray(d) && d.length === 3 ? [-d[0], d[1], d[2]] : d;
+  });
+  const checks = (Array.isArray(target.checks) ? target.checks : []).map((check) => {
+    if (!check || typeof check.m !== "string") return check;
+    const m = /Left$/.test(check.m) ? check.m.replace(/Left$/, "Right") : /Right$/.test(check.m) ? check.m.replace(/Right$/, "Left") : check.m;
+    return Object.assign({}, check, { m });
+  });
+  return { seg, checks, vis: swapVis(target.vis) };
+}
+
+function swapVis(vis) {
+  if (!vis) return vis;
+  const out = {};
+  Object.keys(vis).forEach((name) => { out[swapSide(name)] = vis[name]; });
+  return out;
+}
+
+function compareTerms(current, target, tol) {
   if (!current || !target || !target.seg) return null;
   let sum = 0, weight = 0, shared = 0, wanted = 0;
   SEGMENT_NAMES.forEach((name) => {
@@ -234,9 +322,31 @@ export function compareFeatures(current, target, tolerance) {
     weight += w;
     shared++;
   });
-  if (shared < tol.minShared || shared < tol.minSharedRatio * wanted || weight <= 0) return null;
+  (Array.isArray(target.checks) ? target.checks : []).forEach((check) => {
+    if (!check || typeof check.m !== "string") return;
+    wanted++;
+    const score = checkScore(check, current.metrics);
+    if (score === null) return;
+    const w = typeof check.weight === "number" && check.weight > 0 ? check.weight : 1;
+    const angle = (1 - score) * tol.rmsDeg;
+    sum += w * angle * angle;
+    weight += w;
+    shared++;
+  });
+  if (shared < Math.min(tol.minShared, wanted) || shared < tol.minSharedRatio * wanted || weight <= 0) return null;
   const error = Math.sqrt(sum / weight);
   return { proximity: Math.max(0, 1 - error / tol.rmsDeg), error, shared };
+}
+
+export function compareFeatures(current, target, tolerance) {
+  const tol = Object.assign({}, MATCH_TOLERANCE, tolerance);
+  if (!current || !target || (!target.seg && !target.checks)) return null;
+  const direct = compareTerms(current, target, tol);
+  if (!target.alt) return direct;
+  const mirrored = compareTerms(current, mirrorTarget(target), tol);
+  if (!direct) return mirrored;
+  if (!mirrored) return direct;
+  return direct.proximity >= mirrored.proximity ? direct : mirrored;
 }
 
 function along(f, name, dir, minCos, minVis) {

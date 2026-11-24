@@ -39,6 +39,34 @@ export function createOneEuroFilter(options) {
   };
 }
 
+export const HOLD_DEFAULTS = Object.freeze({ holdMs: 200, minVisibility: 0.5 });
+
+export function createVisibilityHold(options) {
+  const o = Object.assign({}, HOLD_DEFAULTS, options);
+  let last = [];
+  return {
+    hold(list, tMs) {
+      if (!list) {
+        last = [];
+        return null;
+      }
+      return list.map((p, i) => {
+        const visible = p && (p.visibility === undefined || p.visibility >= o.minVisibility);
+        if (visible) {
+          last[i] = { x: p.x, y: p.y, z: p.z || 0, visibility: p.visibility === undefined ? 1 : p.visibility, t: tMs };
+          return p;
+        }
+        const held = last[i];
+        if (held && tMs - held.t <= o.holdMs) return { x: held.x, y: held.y, z: held.z, visibility: held.visibility };
+        return p;
+      });
+    },
+    reset() {
+      last = [];
+    },
+  };
+}
+
 const AXES = ["x", "y", "z"];
 
 export function createLandmarkSmoother(options) {

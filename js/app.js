@@ -1,4 +1,4 @@
-import { createPoseEngine, CONNECTIONS, LANDMARK, SOURCE, STATUS, FACING, LENS, CAPTURE_STATE, CAPTURE_RESULT, CALIBRATION_STATE, CALIBRATION_RESULT, PREVIEW_JOINTS, POSE_EVENT, gradeFor, normalizeSequence, validCalibration } from "../engine/v2/index.js?v=0.4.0";
+import { createPoseEngine, CONNECTIONS, LANDMARK, SOURCE, STATUS, FACING, LENS, CAPTURE_STATE, CAPTURE_RESULT, CALIBRATION_STATE, CALIBRATION_RESULT, PREVIEW_JOINTS, POSE_EVENT, gradeFor, normalizeSequence, validCalibration } from "../engine/v2/index.js?v=0.5.0";
 import {
   APP_ID, APP_VERSION, CAMERA_KEY, LENS_KEY, CALIBRATION_KEY, CALIBRATION_MAX, STATS_KEY, STAT, STATS, JOINT_RADIUS_PX, BONE_WIDTH_PX, THUMB_BONE_PX, THUMB_JOINT_PX,
   MIN_JOINT_VISIBILITY, MAX_DPR, PERCENT, COLOR, TEXT, POP_GRADE_MS, STATUS_MS, CAPTURED_MS, CONFIRM_MS, NAME_MAX, DESCRIPTION_MAX,
@@ -375,6 +375,7 @@ function resizeCanvas() {
   canvas.width = Math.round(stage.clientWidth * dpr);
   canvas.height = Math.round(stage.clientHeight * dpr);
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  sizeModelCanvas();
   if (lastFrame) draw(lastFrame);
 }
 
@@ -450,6 +451,149 @@ function drawThumb(el, pts, size) {
     c.beginPath();
     c.arc(N.x, N.y, Math.max(THUMB_JOINT_PX * scale, size * HEAD_RADIUS_RATIO), 0, Math.PI * 2);
     c.fill();
+  }
+}
+
+const MODEL_BONES = [
+  ["left_shoulder", "right_shoulder", "mid"], ["left_hip", "right_hip", "mid"],
+  ["left_shoulder", "left_hip", "mid"], ["right_shoulder", "right_hip", "mid"],
+  ["left_shoulder", "left_elbow", "left"], ["left_elbow", "left_wrist", "left"],
+  ["right_shoulder", "right_elbow", "right"], ["right_elbow", "right_wrist", "right"],
+  ["left_hip", "left_knee", "left"], ["left_knee", "left_ankle", "left"],
+  ["right_hip", "right_knee", "right"], ["right_knee", "right_ankle", "right"],
+].map(([a, b, side]) => [PREVIEW_JOINTS.indexOf(a), PREVIEW_JOINTS.indexOf(b), side]);
+const MODEL_COLOR = { left: COLOR.boneLeft, right: COLOR.boneRight, mid: COLOR.bone };
+const SIDE_HOLD_MS = 650;
+const SIDE_TWEEN_MS = 450;
+const MODEL_BONE_PX = 5;
+const MODEL_JOINT_PX = 3.4;
+const sideEl = $("side");
+const sideBackdrop = $("side-backdrop");
+const sideList = $("side-list");
+const sideCanvas = $("side-canvas");
+let sideMoveId = null;
+let sideRaf = 0;
+
+function sizeModelCanvas() {
+  const dpr = Math.min(window.devicePixelRatio || 1, MAX_DPR);
+  sideCanvas.width = Math.round(sideCanvas.clientWidth * dpr);
+  sideCanvas.height = Math.round(sideCanvas.clientHeight * dpr);
+}
+
+function drawModel(pts) {
+  const c = sideCanvas.getContext("2d");
+  const dpr = Math.min(window.devicePixelRatio || 1, MAX_DPR);
+  const w = sideCanvas.clientWidth;
+  const h = sideCanvas.clientHeight;
+  c.setTransform(dpr, 0, 0, dpr, 0, 0);
+  c.clearRect(0, 0, w, h);
+  if (!pts || !pts.length) return;
+  const s = Math.min(w, h) * 0.86;
+  const ox = (w - s) / 2;
+  const oy = (h - s) / 2;
+  const at = (q) => ({ x: ox + q[0] * s, y: oy + q[1] * s });
+  c.lineCap = "round";
+  c.lineWidth = MODEL_BONE_PX;
+  MODEL_BONES.forEach(([a, b, side]) => {
+    const pa = pts[a];
+    const pb = pts[b];
+    if (!pa || !pb) return;
+    const A = at(pa);
+    const B = at(pb);
+    c.strokeStyle = MODEL_COLOR[side];
+    c.beginPath();
+    c.moveTo(A.x, A.y);
+    c.lineTo(B.x, B.y);
+    c.stroke();
+  });
+  c.fillStyle = COLOR.joint;
+  pts.forEach((q) => {
+    if (!q) return;
+    const P = at(q);
+    c.beginPath();
+    c.arc(P.x, P.y, MODEL_JOINT_PX, 0, Math.PI * 2);
+    c.fill();
+  });
+  const nose = pts[NOSE_INDEX];
+  if (nose) {
+    const N = at(nose);
+    c.fillStyle = COLOR.thumbJoint;
+    c.beginPath();
+    c.arc(N.x, N.y, Math.max(MODEL_JOINT_PX, s * HEAD_RADIUS_RATIO), 0, Math.PI * 2);
+    c.fill();
+  }
+}
+
+function modelLerp(a, b, k) {
+  return a.map((q, i) => {
+    const r = b[i];
+    if (!q || !r) return k < 0.5 ? q : r;
+    return [q[0] + (r[0] - q[0]) * k, q[1] + (r[1] - q[1]) * k, (q[2] || 0) + ((r[2] || 0) - (q[2] || 0)) * k];
+  });
+}
+
+function modelEase(v) {
+  return v < 0.5 ? 2 * v * v : 1 - Math.pow(-2 * v + 2, 2) / 2;
+}
+
+function sidePtsAt(move, now) {
+  const poses = move.sequence.map(poseById).filter((p) => p && p.pts && p.pts.length);
+  if (!poses.length) return null;
+  const step = SIDE_HOLD_MS + SIDE_TWEEN_MS;
+  const phase = (now % (step * poses.length)) / step;
+  const i = Math.floor(phase);
+  const f = phase - i;
+  const a = poses[i % poses.length];
+  const b = poses[(i + 1) % poses.length];
+  const tt = f * step;
+  return modelLerp(a.pts, b.pts, tt <= SIDE_HOLD_MS ? 0 : modelEase((tt - SIDE_HOLD_MS) / SIDE_TWEEN_MS));
+}
+
+function sideTick() {
+  const move = sideMoveId ? library.movements.find((m) => m.id === sideMoveId) : null;
+  drawModel(move ? sidePtsAt(move, performance.now()) : null);
+  sideRaf = requestAnimationFrame(sideTick);
+}
+
+function renderSideList() {
+  if (!library.movements.length) {
+    sideList.replaceChildren(el("li", "side-empty", TEXT.menuEmpty));
+    return;
+  }
+  sideList.replaceChildren(...library.movements.map((m) => {
+    const li = el("li");
+    const b = button("side-item", undefined, () => selectSide(m.id));
+    b.setAttribute("aria-pressed", String(m.id === sideMoveId));
+    const body = el("span", "item-body");
+    body.append(el("span", "item-name", m.name), el("span", "side-item-sub", m.sequence.map(poseName).filter(Boolean).join(" → ")));
+    b.append(body);
+    li.append(b);
+    return li;
+  }));
+}
+
+function selectSide(id) {
+  sideMoveId = id;
+  focusId = id;
+  renderSideList();
+  renderHud(lastFrame);
+}
+
+function openSide() {
+  if (!library.movements.some((m) => m.id === sideMoveId)) sideMoveId = library.movements.length ? library.movements[0].id : null;
+  sideEl.classList.add("open");
+  sideBackdrop.hidden = false;
+  renderSideList();
+  sizeModelCanvas();
+  if (!sideRaf) sideRaf = requestAnimationFrame(sideTick);
+}
+
+function closeSide() {
+  sideEl.classList.remove("open");
+  sideBackdrop.hidden = true;
+  if (sideRaf) {
+    cancelAnimationFrame(sideRaf);
+    sideRaf = 0;
   }
 }
 
@@ -635,6 +779,16 @@ ui.reset.addEventListener("click", () => {
   engine.reset();
   lastRep = null;
   renderHud(lastFrame);
+});
+
+$("btn-menu").addEventListener("click", () => {
+  if (sideEl.classList.contains("open")) closeSide();
+  else openSide();
+});
+sideBackdrop.addEventListener("click", closeSide);
+$("side-close").addEventListener("click", closeSide);
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && sideEl.classList.contains("open")) closeSide();
 });
 
 function el(tag, cls, text) {

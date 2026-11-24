@@ -1,10 +1,11 @@
 export const APP_ID = "pose-engine";
-export const APP_VERSION = "0.4.0";
+export const APP_VERSION = "0.5.0";
 export const STATS_KEY = "pose-engine.stats";
 export const CAMERA_KEY = "pose-engine.camera";
 export const LENS_KEY = "pose-engine.lens";
 export const LIBRARY_KEY = "pose-engine.library";
 export const CALIBRATION_KEY = "pose-engine.calibration";
+export const SEEDED_KEY = "pose-engine.seeded";
 export const CALIBRATION_MAX = 6;
 export const EXPORT_FORMAT = 1;
 
@@ -109,6 +110,8 @@ export const TEXT = Object.freeze({
   usedIn: (n) => (n === 1 ? "Está en 1 movimiento" : "Está en " + n + " movimientos"),
   noDescription: "Sin descripción",
   removeStep: "Quitar",
+  menu: "Movimientos",
+  menuEmpty: "Aún no hay movimientos que mostrar.",
   errors: Object.freeze({
     "camera-denied": "No hay permiso para la cámara. Actívalo en Ajustes › Safari › Cámara y recarga.",
     "camera-not-found": "No se encontró una cámara en este dispositivo.",

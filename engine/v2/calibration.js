@@ -15,6 +15,7 @@ const PART_SEGMENTS = Object.freeze({
 });
 const SHOULDERS = [LANDMARK.left_shoulder, LANDMARK.right_shoulder];
 const HIPS = [LANDMARK.left_hip, LANDMARK.right_hip];
+const ANKLES = [LANDMARK.left_ankle, LANDMARK.right_ankle];
 const ROUND = 1000;
 
 function round(v) {
@@ -75,13 +76,21 @@ export function computeCalibration(samples, options) {
   const shoulderWidth = median(frames.map((s) => dist(s.world[SHOULDERS[0]], s.world[SHOULDERS[1]])));
   const hipWidth = median(frames.map((s) => dist(s.world[HIPS[0]], s.world[HIPS[1]])));
   const torso = median(frames.map((s) => dist(mid(s.world, SHOULDERS), mid(s.world, HIPS))));
+  const up = { x: -dx / dn, y: -dy / dn, z: -dz / dn };
+  const heights = frames.filter((s) => ANKLES.every((i) => finite(s.world[i]))).map((s) => {
+    const mS = mid(s.world, SHOULDERS);
+    const mA = mid(s.world, ANKLES);
+    return (mS.x - mA.x) * up.x + (mS.y - mA.y) * up.y + (mS.z - mA.z) * up.z;
+  });
+  const body = { shoulderWidth: round(shoulderWidth), hipWidth: round(hipWidth), torso: round(torso) };
+  if (heights.length) body.shoulderHeight = round(median(heights));
   return {
     v: CALIBRATION_VERSION,
     down: [round(dx / dn), round(dy / dn), round(dz / dn)],
     chirality: noseDepth < -o.minNoseDepth ? -1 : 1,
     len,
     vis,
-    body: { shoulderWidth: round(shoulderWidth), hipWidth: round(hipWidth), torso: round(torso) },
+    body,
     missing: Object.keys(PART_SEGMENTS).filter((part) => PART_SEGMENTS[part].some((name) => !(name in len))),
   };
 }
