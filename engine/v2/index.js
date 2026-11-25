@@ -12,7 +12,7 @@ import { createMotionTracker } from "./motion.js";
 import { createOnsetDetector, ONSET_DEFAULTS, ONSET_SIDE } from "./onset.js";
 import { openCamera, closeCamera, retuneLens, readCameraState, emptyCameraState, FACING, LENS, CAMERA_ERROR, CameraError, CAMERA_RELEASE_MS } from "./camera.js";
 
-export const ENGINE_VERSION = "0.5.0";
+export const ENGINE_VERSION = "0.5.1";
 export const SOURCE = Object.freeze({ CAMERA: "camera", VIDEO: "video" });
 export const STATUS = Object.freeze({ LOADING_MODEL: "loading-model", OPENING_CAMERA: "opening-camera", RUNNING: "running", STOPPED: "stopped" });
 export const ENGINE_ERROR = Object.freeze(Object.assign({ MODEL_FAILED: "model-failed", DETECT_FAILED: "detect-failed", NO_VIDEO: "no-video" }, CAMERA_ERROR));
