@@ -1,6 +1,6 @@
 const PREFIX = "pose-engine-";
-const CACHE = PREFIX + "v0.7.2";
-const RUNTIME = PREFIX + "runtime-v0.7.2";
+const CACHE = PREFIX + "v0.8.0";
+const RUNTIME = PREFIX + "runtime-v0.8.0";
 const RUNTIME_HOSTS = ["cdn.jsdelivr.net", "storage.googleapis.com"];
 const ASSETS = [
   "./",

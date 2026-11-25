@@ -1,5 +1,5 @@
 export const APP_ID = "pose-engine";
-export const APP_VERSION = "0.7.2";
+export const APP_VERSION = "0.8.0";
 export const STATS_KEY = "pose-engine.stats";
 export const CAMERA_KEY = "pose-engine.camera";
 export const LENS_KEY = "pose-engine.lens";
@@ -153,12 +153,12 @@ export const TEXT = Object.freeze({
   newMove: "Nuevo movimiento",
   copy: "Copiar datos",
   paste: "Pegar datos",
-  reset: "Restablecer poses y movimientos",
-  resetTitle: "Restablecer poses y movimientos",
-  resetText: "Se perderán tus poses y movimientos propios y volverán las poses y movimientos de fábrica.",
-  resetConfirm: "Restablecer",
+  reset: "Vaciar biblioteca",
+  resetTitle: "Vaciar biblioteca",
+  resetText: "Se perderán tus poses y movimientos propios y la biblioteca quedará vacía.",
+  resetConfirm: "Vaciar",
   cancel: "Cancelar",
-  resetDone: "Poses y movimientos restablecidos",
+  resetDone: "Biblioteca vaciada",
   copied: "Datos copiados",
   copyFailed: "No se pudo copiar",
   imported: (p, m) => "Se importaron " + (p === 1 ? "1 pose" : p + " poses") + " y " + (m === 1 ? "1 movimiento" : m + " movimientos"),
