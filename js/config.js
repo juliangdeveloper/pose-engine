@@ -1,5 +1,5 @@
 export const APP_ID = "pose-engine";
-export const APP_VERSION = "0.5.1";
+export const APP_VERSION = "0.6.0";
 export const STATS_KEY = "pose-engine.stats";
 export const CAMERA_KEY = "pose-engine.camera";
 export const LENS_KEY = "pose-engine.lens";
@@ -19,6 +19,8 @@ export const POP_GRADE_MS = 1100;
 export const STATUS_MS = 2600;
 export const CAPTURED_MS = 2200;
 export const CONFIRM_MS = 3000;
+export const FLASH_MS = 650;
+export const LUM_SAMPLE_MS = 600;
 export const JOINT_RADIUS_PX = 4;
 export const BONE_WIDTH_PX = 4;
 export const THUMB_BONE_PX = 3;
@@ -28,6 +30,42 @@ export const MAX_DPR = 2;
 export const PERCENT = 100;
 export const NAME_MAX = 40;
 export const DESCRIPTION_MAX = 160;
+export const GUIDE_BONE_PX = 5;
+export const GUIDE_JOINT_PX = 3.5;
+export const GUIDE_VISIBILITY = 0.5;
+export const GUIDE_H_TOL = 0.55;
+export const GUIDE_V_TOL = 0.45;
+export const GUIDE_ALPHA = 0.42;
+export const GHOST_BONE_PX = 3;
+export const GHOST_JOINT_PX = 3;
+export const GHOST_TOL_RATIO = 0.09;
+export const GHOST_ALPHA = 0.75;
+export const GHOST_MARGIN = 1.15;
+export const FADE_FLOOR = 0.18;
+export const OUTSIDE_FADE = 0.4;
+export const FRAME_MIN_HEIGHT = 0.45;
+export const FRAME_MAX_HEIGHT = 0.88;
+export const FRAME_PAD = 0.02;
+export const LUM_SIZE = 16;
+export const LUM_DARK = 34;
+export const LUM_CENTER_MAX = 72;
+export const LUM_CONTRAST = 42;
+
+export const T_GUIDE = Object.freeze({
+  nose: [0.5, 0.09],
+  left_shoulder: [0.4, 0.21],
+  right_shoulder: [0.6, 0.21],
+  left_elbow: [0.23, 0.21],
+  right_elbow: [0.77, 0.21],
+  left_wrist: [0.07, 0.21],
+  right_wrist: [0.93, 0.21],
+  left_hip: [0.43, 0.48],
+  right_hip: [0.57, 0.48],
+  left_knee: [0.43, 0.7],
+  right_knee: [0.57, 0.7],
+  left_ankle: [0.42, 0.92],
+  right_ankle: [0.58, 0.92],
+});
 
 export const COLOR = Object.freeze({
   bone: "rgba(255,255,255,0.85)",
@@ -36,6 +74,10 @@ export const COLOR = Object.freeze({
   joint: "#ffffff",
   thumb: "#9aa3b2",
   thumbJoint: "#f2f4f8",
+  guideWait: "rgba(255,255,255,0.42)",
+  guideOk: "#3ddc97",
+  ghost: "#5aa9ff",
+  ghostBad: "#ff6b6b",
 });
 
 export const TEXT = Object.freeze({
@@ -112,6 +154,11 @@ export const TEXT = Object.freeze({
   removeStep: "Quitar",
   menu: "Movimientos",
   menuEmpty: "Aún no hay movimientos que mostrar.",
+  tooFar: "Aléjate un paso",
+  tooNear: "Acércate",
+  outFrame: "Entra en el cuadro",
+  dark: "Poca luz",
+  backlight: "Contraluz",
   errors: Object.freeze({
     "camera-denied": "No hay permiso para la cámara. Actívalo en Ajustes › Safari › Cámara y recarga.",
     "camera-not-found": "No se encontró una cámara en este dispositivo.",

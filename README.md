@@ -2,20 +2,20 @@
 
 **Real-time pose detection and rep counter for the browser: MediaPipe pose tracking that runs on-device, for fitness apps and interactive demos.**
 
-> Detecta tu cuerpo con la cámara, captura tus propias poses, arma movimientos con ellas y cuenta repeticiones calificadas en tiempo real.
+> Sigue la silueta de la pose T para calibrar, imita el fantasma de cada pose, mira tu esqueleto en vivo y cuenta repeticiones con contador grande y barra de recorrido.
 
 **[▶ Probar la demo](https://juliangdeveloper.github.io/pose-engine/)**
 
-<img src="assets/screenshot.jpg" alt="menú lateral de pose-engine con el modelo de palitos reproduciendo el movimiento Jab en bucle y la lista de movimientos de calistenia y boxeo" width="320">
+<img src="assets/screenshot.jpg" alt="pantalla de calibración de pose-engine con la silueta de la pose T en verde sobre el esqueleto en vivo y el contador grande con barra de recorrido" width="320">
 
 ## Cómo se usa
 
-- Calibra tu cuerpo con la pose T: la app mide tus proporciones y la posición de la cámara para comparar igual desde cualquier ángulo.
+- Calibra con la silueta de la pose T: cada segmento se pone verde cuando lo cubres y la medición arranca sola al coincidir.
+- Imita la pose siguiente con el fantasma: las articulaciones que no coinciden se marcan en rojo y tu esqueleto en vivo atenúa las de baja confianza.
+- Ajusta distancia y luz con los avisos «Aléjate un paso», «Acércate», «Entra en el cuadro», «Poca luz» y «Contraluz» antes de empezar.
 - Captura tus poses con la cámara: haz la pose T y, tras la cuenta de 3 segundos, se guarda la pose en la que estés.
 - Arma movimientos con secuencias de tus poses capturadas, por ejemplo guardia → jab.
-- Cuenta repeticiones en tiempo real y califica cada una (Excelente, Bien u OK) según qué tan cerca llegaste a cada pose.
-- Abre el menú lateral para ver todos los movimientos: el modelo de palitos los reproduce en bucle.
-- Empieza con ocho poses y cinco movimientos por defecto, incluidos los de boxeo: guardia, jab, cross y esquive.
+- Cuenta repeticiones con contador grande, barra de recorrido y destello en el borde: verde al contar, rojo si quedó a medias.
 
 ## Usar el motor en otro proyecto
 

@@ -137,6 +137,89 @@ button { font: inherit; color: inherit; }
 .stage-msg p { margin: 0; max-width: 34ch; line-height: 1.35; }
 .stage-hint { color: var(--muted); font-size: 14px; }
 
+.stage-flash {
+  position: absolute;
+  z-index: 4;
+  inset: 0;
+  border-radius: 0;
+  pointer-events: none;
+  opacity: 0;
+}
+
+.stage-flash.show[data-kind="ok"] { animation: flash-ok 650ms ease-out both; }
+.stage-flash.show[data-kind="bad"] { animation: flash-bad 650ms ease-out both; }
+
+@keyframes flash-ok {
+  0% { opacity: 1; box-shadow: inset 0 0 0 6px var(--accent); }
+  100% { opacity: 0; box-shadow: inset 0 0 0 6px var(--accent); }
+}
+
+@keyframes flash-bad {
+  0% { opacity: 1; box-shadow: inset 0 0 0 6px #ff6b6b; }
+  100% { opacity: 0; box-shadow: inset 0 0 0 6px #ff6b6b; }
+}
+
+.stage-hud {
+  position: absolute;
+  z-index: 2;
+  left: 12px;
+  bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: calc(100% - 24px);
+  pointer-events: none;
+}
+
+.stage-reps {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 14px 6px;
+  border-radius: 14px;
+  background: rgba(15, 17, 21, 0.62);
+}
+
+.stage-reps-value { font-size: 46px; line-height: 1; font-weight: 800; font-variant-numeric: tabular-nums; }
+.stage-reps-label { font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.6px; }
+
+.stage-track {
+  position: relative;
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(15, 17, 21, 0.62);
+  overflow: hidden;
+}
+
+.stage-track-fill {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--accent);
+  transform-origin: left center;
+  transform: scaleX(0);
+  transition: transform 120ms linear;
+}
+
+.stage-alert {
+  position: absolute;
+  z-index: 2;
+  left: 50%;
+  bottom: 62px;
+  margin: 0;
+  max-width: calc(100% - 24px);
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: rgba(15, 17, 21, 0.82);
+  border: 1px solid var(--line);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 700;
+  text-align: center;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
 .panel {
   flex: 0 0 auto;
   display: flex;

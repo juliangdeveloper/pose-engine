@@ -79,6 +79,7 @@ export function createOnsetDetector(options) {
 
   function reset() {
     states.clear();
+    defs.forEach((d) => states.set(d.id, {}));
   }
 
   return { setMovements, update, reset };

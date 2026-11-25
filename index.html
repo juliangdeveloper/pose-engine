@@ -16,8 +16,8 @@
   <title>Pose Engine</title>
   <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="assets/icon-180.png">
-  <link rel="manifest" href="manifest.json?v=0.5.1">
-  <link rel="stylesheet" href="css/styles.css?v=0.5.1">
+  <link rel="manifest" href="manifest.json?v=0.6.0">
+  <link rel="stylesheet" href="css/styles.css?v=0.6.0">
 </head>
 <body>
   <header class="bar">
@@ -39,6 +39,15 @@
     <main class="stage" id="stage">
       <video id="video" playsinline muted autoplay></video>
       <canvas id="overlay" aria-hidden="true"></canvas>
+      <div class="stage-flash" id="stage-flash" aria-hidden="true"></div>
+      <div class="stage-hud" id="stage-hud" hidden aria-live="polite">
+        <div class="stage-reps">
+          <span class="stage-reps-value" id="stage-reps-value">0</span>
+          <span class="stage-reps-label" id="stage-reps-label">Reps</span>
+        </div>
+        <div class="stage-track" aria-hidden="true"><span class="stage-track-fill" id="stage-track-fill"></span></div>
+      </div>
+      <p class="stage-alert" id="stage-alert" hidden aria-live="polite"></p>
       <button class="zoom-btn" type="button" id="btn-zoom" hidden aria-label="Ampliar encuadre" aria-pressed="false">
         <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
           <circle cx="10" cy="10" r="6.2" fill="none" stroke="currentColor" stroke-width="1.8"/>
@@ -151,6 +160,6 @@
     </div>
   </dialog>
 
-  <script type="module" src="js/app.js?v=0.5.1"></script>
+  <script type="module" src="js/app.js?v=0.6.0"></script>
 </body>
 </html>

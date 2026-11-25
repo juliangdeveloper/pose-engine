@@ -1,7 +1,10 @@
-import { createPoseEngine, CONNECTIONS, LANDMARK, SOURCE, STATUS, FACING, LENS, CAPTURE_STATE, CAPTURE_RESULT, CALIBRATION_STATE, CALIBRATION_RESULT, PREVIEW_JOINTS, POSE_EVENT, gradeFor, normalizeSequence, validCalibration } from "../engine/v2/index.js?v=0.5.1";
+import { createPoseEngine, CONNECTIONS, LANDMARK, SOURCE, STATUS, FACING, LENS, CAPTURE_STATE, CAPTURE_RESULT, CALIBRATION_STATE, CALIBRATION_RESULT, PREVIEW_JOINTS, POSE_EVENT, gradeFor, normalizeSequence, validCalibration } from "../engine/v2/index.js?v=0.6.0";
 import {
   APP_ID, APP_VERSION, CAMERA_KEY, LENS_KEY, CALIBRATION_KEY, CALIBRATION_MAX, STATS_KEY, STAT, STATS, JOINT_RADIUS_PX, BONE_WIDTH_PX, THUMB_BONE_PX, THUMB_JOINT_PX,
-  MIN_JOINT_VISIBILITY, MAX_DPR, PERCENT, COLOR, TEXT, POP_GRADE_MS, STATUS_MS, CAPTURED_MS, CONFIRM_MS, NAME_MAX, DESCRIPTION_MAX,
+  MIN_JOINT_VISIBILITY, MAX_DPR, PERCENT, COLOR, TEXT, POP_GRADE_MS, STATUS_MS, CAPTURED_MS, CONFIRM_MS, FLASH_MS, LUM_SAMPLE_MS,
+  GUIDE_BONE_PX, GUIDE_JOINT_PX, GUIDE_VISIBILITY, GUIDE_H_TOL, GUIDE_V_TOL, GUIDE_ALPHA, GHOST_BONE_PX, GHOST_JOINT_PX, GHOST_TOL_RATIO, GHOST_ALPHA,
+  GHOST_MARGIN, FADE_FLOOR, OUTSIDE_FADE, FRAME_MIN_HEIGHT, FRAME_MAX_HEIGHT, FRAME_PAD, LUM_SIZE, LUM_DARK, LUM_CENTER_MAX, LUM_CONTRAST, T_GUIDE,
+  NAME_MAX, DESCRIPTION_MAX,
 } from "./config.js";
 import { loadLibrary, saveLibrary, exportLibrary, parseImport, mergeLibrary, newId, nextName, playable } from "./library.js";
 import { metaUpdate, metaRead, crearEscritor, metaDeclararProyecto } from "./meta.js";
@@ -21,6 +24,18 @@ const THUMB_BONES = Object.freeze([
 ].map(([a, b]) => [PREVIEW_JOINTS.indexOf(a), PREVIEW_JOINTS.indexOf(b)]));
 const NOSE_INDEX = PREVIEW_JOINTS.indexOf("nose");
 const HEAD_RADIUS_RATIO = 0.06;
+const GUIDE_BONES = Object.freeze([
+  ["left_shoulder", "right_shoulder", "h"], ["left_shoulder", "left_hip", "v"], ["right_shoulder", "right_hip", "v"],
+  ["left_shoulder", "left_elbow", "h"], ["left_elbow", "left_wrist", "h"],
+  ["right_shoulder", "right_elbow", "h"], ["right_elbow", "right_wrist", "h"],
+  ["left_hip", "left_knee", "v"], ["left_knee", "left_ankle", "v"],
+  ["right_hip", "right_knee", "v"], ["right_knee", "right_ankle", "v"],
+]);
+const GHOST_BONES = THUMB_BONES;
+const LUM_WEIGHT = Object.freeze([0.2126, 0.7152, 0.0722]);
+const LUM_CENTER = Object.freeze({ lo: 0.25, hi: 0.75 });
+const HALF = 2;
+const HUNDRED = 100;
 
 const $ = (id) => document.getElementById(id);
 const video = $("video");
@@ -36,6 +51,8 @@ const ui = {
   countdown: $("countdown"), posesBtn: $("btn-poses"), movesBtn: $("btn-moves"), posesCount: $("poses-count"), movesCount: $("moves-count"),
   lib: $("lib"), libMain: $("lib-main"), libFoot: $("lib-foot"), libStatus: $("lib-status"), libClose: $("lib-close"),
   tabPoses: $("tab-poses"), tabMoves: $("tab-moves"), copy: $("btn-copy"), paste: $("btn-paste"), calibrate: $("btn-calibrate"),
+  stageHud: $("stage-hud"), stageReps: $("stage-reps-value"), stageRepsLabel: $("stage-reps-label"), stageTrack: $("stage-track-fill"),
+  stageAlert: $("stage-alert"), stageFlash: $("stage-flash"),
 };
 
 function readKey(key, allowed, fallback) {
@@ -77,6 +94,18 @@ let view = VIEW.POSES;
 let editing = null;
 let statusTimer = 0;
 let popTimer = 0;
+let flashTimer = 0;
+let lumTimer = 0;
+let lumMean = null;
+let lumCenter = null;
+let lumBorder = null;
+const prevSteps = {};
+const prevCounts = {};
+let lastFocusId = null;
+const lumCanvas = document.createElement("canvas");
+lumCanvas.width = LUM_SIZE;
+lumCanvas.height = LUM_SIZE;
+const lumCtx = lumCanvas.getContext("2d", { willReadFrequently: true });
 
 function loadStats() {
   const empty = { [STAT.REPS_TOTAL]: 0, [STAT.CAPTURES_TOTAL]: 0 };
@@ -143,6 +172,186 @@ function hideMessage() {
   ui.msg.hidden = true;
 }
 
+function flashStage(kind) {
+  ui.stageFlash.dataset.kind = kind;
+  ui.stageFlash.classList.remove("show");
+  void ui.stageFlash.offsetWidth;
+  ui.stageFlash.classList.add("show");
+  clearTimeout(flashTimer);
+  flashTimer = setTimeout(() => { ui.stageFlash.classList.remove("show"); }, FLASH_MS);
+}
+
+function sampleLight() {
+  const now = performance.now();
+  if (now - lumTimer < LUM_SAMPLE_MS) return;
+  lumTimer = now;
+  try {
+    if (!video || video.readyState < 2 || !video.videoWidth || !video.videoHeight) return;
+    lumCtx.drawImage(video, 0, 0, LUM_SIZE, LUM_SIZE);
+    const data = lumCtx.getImageData(0, 0, LUM_SIZE, LUM_SIZE).data;
+    let sum = 0;
+    let cSum = 0;
+    let cN = 0;
+    let bSum = 0;
+    let bN = 0;
+    const lo = Math.round(LUM_CENTER.lo * LUM_SIZE);
+    const hi = Math.round(LUM_CENTER.hi * LUM_SIZE);
+    for (let y = 0; y < LUM_SIZE; y++) {
+      for (let x = 0; x < LUM_SIZE; x++) {
+        const i = (y * LUM_SIZE + x) * 4;
+        const v = data[i] * LUM_WEIGHT[0] + data[i + 1] * LUM_WEIGHT[1] + data[i + 2] * LUM_WEIGHT[2];
+        sum += v;
+        if (x >= lo && x < hi && y >= lo && y < hi) {
+          cSum += v;
+          cN++;
+        } else {
+          bSum += v;
+          bN++;
+        }
+      }
+    }
+    const total = LUM_SIZE * LUM_SIZE;
+    lumMean = sum / total;
+    lumCenter = cN ? cSum / cN : lumMean;
+    lumBorder = bN ? bSum / bN : lumMean;
+  } catch (e) {
+    return;
+  }
+}
+
+function visibilityOf(p) {
+  return p && typeof p.visibility === "number" ? p.visibility : 1;
+}
+
+function pointInFrame(p) {
+  if (!p || !isFinite(p.x) || !isFinite(p.y)) return false;
+  return p.x >= -FRAME_PAD && p.x <= 1 + FRAME_PAD && p.y >= -FRAME_PAD && p.y <= 1 + FRAME_PAD;
+}
+
+function fadeOf(p) {
+  let a = Math.min(1, Math.max(0, visibilityOf(p)));
+  if (!pointInFrame(p)) a *= OUTSIDE_FADE;
+  return Math.max(FADE_FLOOR, a);
+}
+
+function bodyHeight(lm) {
+  if (!lm) return 0;
+  const nose = lm[LANDMARK.nose];
+  const ankleL = lm[LANDMARK.left_ankle];
+  const ankleR = lm[LANDMARK.right_ankle];
+  const top = nose && visibilityOf(nose) >= MIN_JOINT_VISIBILITY ? nose.y : null;
+  const bottoms = [];
+  if (ankleL && visibilityOf(ankleL) >= MIN_JOINT_VISIBILITY) bottoms.push(ankleL.y);
+  if (ankleR && visibilityOf(ankleR) >= MIN_JOINT_VISIBILITY) bottoms.push(ankleR.y);
+  if (top === null || !bottoms.length) return 0;
+  return Math.abs(Math.max.apply(null, bottoms) - top);
+}
+
+function feetVisible(lm) {
+  if (!lm) return false;
+  return ["left_ankle", "right_ankle", "left_heel", "right_heel"].every((n) => {
+    const p = lm[LANDMARK[n]];
+    return p && visibilityOf(p) >= MIN_JOINT_VISIBILITY && pointInFrame(p);
+  });
+}
+
+function framingAlert(frame) {
+  if (!running || !frame || !frame.landmarks) return "";
+  const lm = frame.landmarks;
+  const h = bodyHeight(lm);
+  if (!h) return TEXT.outFrame;
+  if (h > FRAME_MAX_HEIGHT) return TEXT.tooFar;
+  if (!feetVisible(lm)) return TEXT.outFrame;
+  if (h < FRAME_MIN_HEIGHT) return TEXT.tooNear;
+  return "";
+}
+
+function lightAlert(frame) {
+  if (!running) return "";
+  if (frame && frame.features) return "";
+  if (lumMean === null || lumCenter === null || lumBorder === null) return "";
+  if (lumMean < LUM_DARK) return TEXT.dark;
+  if (lumCenter < LUM_CENTER_MAX && lumBorder - lumCenter > LUM_CONTRAST) return TEXT.backlight;
+  return "";
+}
+
+function stageAlertFor(frame) {
+  return lightAlert(frame) || framingAlert(frame) || "";
+}
+
+function ghostTarget(frame) {
+  if (!frame || engine.calibrating()) return null;
+  const move = frame.movements && frame.movements[focusId];
+  if (move && move.sequence && move.sequence.length) {
+    const idx = move.step >= 0 ? (move.step + 1) % move.sequence.length : 0;
+    return move.sequence[idx];
+  }
+  if (frame.active && frame.active.id) return frame.active.id;
+  if (frame.best && frame.best.id) return frame.best.id;
+  return null;
+}
+
+function segmentCovered(lm, aName, bName, orient) {
+  const a = lm[LANDMARK[aName]];
+  const b = lm[LANDMARK[bName]];
+  if (!a || !b) return false;
+  if (visibilityOf(a) < GUIDE_VISIBILITY || visibilityOf(b) < GUIDE_VISIBILITY) return false;
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const len = Math.hypot(dx, dy);
+  if (!(len > 0) || !isFinite(len)) return false;
+  if (orient === "h") return Math.abs(dy) / len <= GUIDE_H_TOL;
+  return Math.abs(dx) / len <= GUIDE_V_TOL;
+}
+
+function ghostMapped(pts, lm, mirrored) {
+  if (!pts || pts.length !== PREVIEW_JOINTS.length) return null;
+  const seen = [];
+  for (let i = 0; i < pts.length; i++) {
+    if (pts[i]) seen.push(pts[i]);
+  }
+  if (!seen.length) return null;
+  let gx0 = Infinity;
+  let gy0 = Infinity;
+  let gx1 = -Infinity;
+  let gy1 = -Infinity;
+  seen.forEach((q) => {
+    if (q[0] < gx0) gx0 = q[0];
+    if (q[0] > gx1) gx1 = q[0];
+    if (q[1] < gy0) gy0 = q[1];
+    if (q[1] > gy1) gy1 = q[1];
+  });
+  const gw = Math.max(gx1 - gx0, 0.01);
+  const gh = Math.max(gy1 - gy0, 0.01);
+  let px0 = null;
+  let py0 = null;
+  let px1 = null;
+  let py1 = null;
+  if (lm) {
+    lm.forEach((p) => {
+      if (!p || visibilityOf(p) < MIN_JOINT_VISIBILITY || !isFinite(p.x) || !isFinite(p.y)) return;
+      const x = mirrored ? 1 - p.x : p.x;
+      if (px0 === null || x < px0) px0 = x;
+      if (px1 === null || x > px1) px1 = x;
+      if (py0 === null || p.y < py0) py0 = p.y;
+      if (py1 === null || p.y > py1) py1 = p.y;
+    });
+  }
+  const useBody = px0 !== null && px1 > px0 && py1 > py0;
+  const bw = useBody ? (px1 - px0) * GHOST_MARGIN : gw;
+  const bh = useBody ? (py1 - py0) * GHOST_MARGIN : gh;
+  const bcx = useBody ? (px0 + px1) / HALF : 0.5;
+  const bcy = useBody ? (py0 + py1) / HALF : 0.5;
+  const gcx = (gx0 + gx1) / HALF;
+  const gcy = (gy0 + gy1) / HALF;
+  return pts.map((q) => {
+    if (!q) return null;
+    const nx = bcx + ((q[0] - gcx) * bw) / gw;
+    const ny = bcy + ((q[1] - gcy) * bh) / gh;
+    return { x: mirrored ? 1 - nx : nx, y: ny };
+  });
+}
+
 function pct(v) {
   return Math.round(v * PERCENT) + "%";
 }
@@ -186,6 +395,34 @@ function renderHud(frame) {
   const sub = lastRep && move && lastRep.movement === move.id ? lastRep.grade : null;
   ui.counterSub.textContent = sub ? sub.label : "";
   ui.counterSub.dataset.level = sub ? sub.level : "";
+  ui.stageReps.textContent = String(reps);
+  ui.stageRepsLabel.textContent = move ? move.name : TEXT.reps;
+  ui.stageHud.hidden = !running || !move;
+  let track = 0;
+  if (move && move.sequence && move.sequence.length) {
+    const len = move.sequence.length;
+    let nextProx = 0;
+    if (frame && frame.proximity) {
+      const nextId = move.sequence[move.step >= 0 ? (move.step + 1) % len : 0];
+      const p = frame.proximity[nextId];
+      if (typeof p === "number" && isFinite(p)) nextProx = Math.min(1, Math.max(0, p));
+    }
+    track = move.step >= 0 ? (move.step + nextProx) / len : nextProx / len;
+    if (track > 1) track = 1;
+    if (track < 0) track = 0;
+  }
+  ui.stageTrack.style.transform = "scaleX(" + track.toFixed(3) + ")";
+  sampleLight();
+  const alert = stageAlertFor(frame);
+  ui.stageAlert.hidden = !alert;
+  if (alert) ui.stageAlert.textContent = alert;
+  if (move) {
+    const prev = prevSteps[move.id];
+    const prevCount = prevCounts[move.id];
+    if (typeof prev === "number" && move.step >= 0 && move.step < prev && prev >= 1 && prevCount === move.count) flashStage("bad");
+    prevSteps[move.id] = move.step;
+    prevCounts[move.id] = move.count;
+  }
   renderSeq(move);
   let hint = "";
   if (engine.capturing() || engine.calibrating()) hint = "";
@@ -394,14 +631,103 @@ function draw(frame) {
   if (!lm) return;
   const box = fit(frame);
   const px = (p) => ({ x: box.x + (frame.mirrored ? 1 - p.x : p.x) * box.w, y: box.y + p.y * box.h });
+  const calibrating = engine.calibrating();
+  if (calibrating) drawGuide(lm, box, frame.mirrored);
+  else drawGhost(frame, box, px);
+  drawSkeleton(lm, box, px);
+}
+
+function drawGuide(lm, box, mirrored) {
+  ctx.save();
+  ctx.lineCap = "round";
+  ctx.lineWidth = GUIDE_BONE_PX;
+  GUIDE_BONES.forEach(([aName, bName, orient]) => {
+    const ta = T_GUIDE[aName];
+    const tb = T_GUIDE[bName];
+    if (!ta || !tb) return;
+    const A = { x: box.x + (mirrored ? 1 - ta[0] : ta[0]) * box.w, y: box.y + ta[1] * box.h };
+    const B = { x: box.x + (mirrored ? 1 - tb[0] : tb[0]) * box.w, y: box.y + tb[1] * box.h };
+    const ok = segmentCovered(lm, aName, bName, orient);
+    ctx.globalAlpha = GUIDE_ALPHA;
+    ctx.strokeStyle = ok ? COLOR.guideOk : COLOR.guideWait;
+    if (ok) ctx.globalAlpha = 1;
+    ctx.beginPath();
+    ctx.moveTo(A.x, A.y);
+    ctx.lineTo(B.x, B.y);
+    ctx.stroke();
+  });
+  ctx.fillStyle = COLOR.joint;
+  Object.keys(T_GUIDE).forEach((name) => {
+    const t = T_GUIDE[name];
+    const P = { x: box.x + (mirrored ? 1 - t[0] : t[0]) * box.w, y: box.y + t[1] * box.h };
+    ctx.globalAlpha = GUIDE_ALPHA;
+    ctx.beginPath();
+    ctx.arc(P.x, P.y, GUIDE_JOINT_PX, 0, Math.PI * 2);
+    ctx.fill();
+  });
+  ctx.restore();
+  ctx.globalAlpha = 1;
+}
+
+function drawGhost(frame, box, px) {
+  const id = ghostTarget(frame);
+  if (!id) return;
+  const pose = poseById(id);
+  if (!pose) return;
+  const mapped = ghostMapped(pose.pts, frame.landmarks, frame.mirrored);
+  if (!mapped) return;
+  const h = Math.max(box.h, 1);
+  const tol = GHOST_TOL_RATIO * h;
+  ctx.save();
+  ctx.lineCap = "round";
+  ctx.lineWidth = GHOST_BONE_PX;
+  ctx.setLineDash([8, 5]);
+  ctx.globalAlpha = GHOST_ALPHA;
+  ctx.strokeStyle = COLOR.ghost;
+  GHOST_BONES.forEach(([a, b]) => {
+    const A = mapped[a];
+    const B = mapped[b];
+    if (!A || !B) return;
+    const PA = px(A);
+    const PB = px(B);
+    ctx.beginPath();
+    ctx.moveTo(PA.x, PA.y);
+    ctx.lineTo(PB.x, PB.y);
+    ctx.stroke();
+  });
+  ctx.setLineDash([]);
+  mapped.forEach((g, i) => {
+    if (!g) return;
+    const name = PREVIEW_JOINTS[i];
+    const player = frame.landmarks && frame.landmarks[LANDMARK[name]];
+    let bad = false;
+    if (player && visibilityOf(player) >= MIN_JOINT_VISIBILITY && isFinite(player.x) && isFinite(player.y)) {
+      const P = px(player);
+      const G = px(g);
+      bad = Math.hypot(P.x - G.x, P.y - G.y) > tol;
+    }
+    const G = px(g);
+    ctx.fillStyle = bad ? COLOR.ghostBad : COLOR.ghost;
+    ctx.globalAlpha = GHOST_ALPHA;
+    ctx.beginPath();
+    ctx.arc(G.x, G.y, GHOST_JOINT_PX, 0, Math.PI * 2);
+    ctx.fill();
+  });
+  ctx.restore();
+  ctx.globalAlpha = 1;
+}
+
+function drawSkeleton(lm, box, px) {
+  ctx.save();
   ctx.lineCap = "round";
   ctx.lineWidth = BONE_WIDTH_PX;
   for (const [a, b] of CONNECTIONS) {
     const pa = lm[a];
     const pb = lm[b];
-    if (!pa || !pb || pa.visibility < MIN_JOINT_VISIBILITY || pb.visibility < MIN_JOINT_VISIBILITY) continue;
+    if (!pa || !pb) continue;
     const A = px(pa);
     const B = px(pb);
+    ctx.globalAlpha = Math.min(fadeOf(pa), fadeOf(pb));
     ctx.strokeStyle = leftJoints.has(a) && leftJoints.has(b) ? COLOR.boneLeft : leftJoints.has(a) || leftJoints.has(b) ? COLOR.bone : COLOR.boneRight;
     ctx.beginPath();
     ctx.moveTo(A.x, A.y);
@@ -410,12 +736,15 @@ function draw(frame) {
   }
   ctx.fillStyle = COLOR.joint;
   lm.forEach((p) => {
-    if (!p || p.visibility < MIN_JOINT_VISIBILITY) return;
+    if (!p || !isFinite(p.x) || !isFinite(p.y)) return;
     const P = px(p);
+    ctx.globalAlpha = fadeOf(p);
     ctx.beginPath();
     ctx.arc(P.x, P.y, JOINT_RADIUS_PX, 0, Math.PI * 2);
     ctx.fill();
   });
+  ctx.restore();
+  ctx.globalAlpha = 1;
 }
 
 function drawThumb(el, pts, size) {
@@ -602,6 +931,13 @@ function setRunning(on, src) {
   source = on ? src : null;
   ui.camera.textContent = on && src === SOURCE.CAMERA ? TEXT.stop : TEXT.start;
   ui.camera.classList.toggle("on", on && src === SOURCE.CAMERA);
+  if (!on) {
+    ui.stageHud.hidden = true;
+    ui.stageAlert.hidden = true;
+    lumMean = null;
+    lumCenter = null;
+    lumBorder = null;
+  }
   renderCameraChrome();
 }
 
@@ -689,6 +1025,7 @@ engine.on("rep", (r) => {
   focusId = r.movement;
   restart(ui.counter, "bump");
   popGrade(r.grade);
+  flashStage("ok");
   if (source === SOURCE.CAMERA) {
     stats[STAT.REPS_TOTAL] += 1;
     escritorMeta.pedir();
@@ -778,6 +1115,8 @@ ui.calibrate.addEventListener("click", async () => {
 ui.reset.addEventListener("click", () => {
   engine.reset();
   lastRep = null;
+  Object.keys(prevSteps).forEach((k) => { delete prevSteps[k]; });
+  Object.keys(prevCounts).forEach((k) => { delete prevCounts[k]; });
   renderHud(lastFrame);
 });
 
