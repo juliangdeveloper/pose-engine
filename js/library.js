@@ -1,4 +1,4 @@
-import { SEGMENT_NAMES, PREVIEW_JOINTS, FEATURES_VERSION, normalizeSequence, upgradeFeatures } from "../engine/v2/index.js?v=0.7.0";
+import { SEGMENT_NAMES, PREVIEW_JOINTS, FEATURES_VERSION, normalizeSequence, upgradeFeatures } from "../engine/v2/index.js?v=0.7.1";
 import { LIBRARY_KEY, EXPORT_FORMAT, APP_ID, NAME_MAX, DESCRIPTION_MAX, SEEDED_KEY } from "./config.js";
 import { DEFAULTS_SEED_KEY, DEFAULTS_SEED, DEFAULT_POSES, DEFAULT_MOVEMENTS } from "./defaults.js";
 
@@ -156,6 +156,17 @@ export function saveLibrary(lib) {
   } catch (e) {
     return false;
   }
+}
+
+export function resetLibrary() {
+  const next = clean({ poses: DEFAULT_POSES, movements: DEFAULT_MOVEMENTS });
+  saveLibrary(next);
+  writeSeed(DEFAULTS_SEED);
+  const all = new Set();
+  DEFAULT_POSES.forEach((p) => all.add(p.id));
+  DEFAULT_MOVEMENTS.forEach((m) => all.add(m.id));
+  writeSeeded(all);
+  return next;
 }
 
 export function exportLibrary(lib) {

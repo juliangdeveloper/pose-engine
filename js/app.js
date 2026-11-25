@@ -1,4 +1,4 @@
-import { createPoseEngine, CONNECTIONS, LANDMARK, SOURCE, STATUS, FACING, LENS, CAPTURE_STATE, CAPTURE_RESULT, CALIBRATION_STATE, CALIBRATION_RESULT, PREVIEW_JOINTS, POSE_EVENT, gradeFor, normalizeSequence, validCalibration, jointAngles, targetJointAngles, angleWithin, drawAngleArcs, drawVelocitySkeleton, depthIndicators, drawDepthIndicators, coincidenceFromBad, drawMatchJoints, drawMatchPercent } from "../engine/v2/index.js?v=0.7.0";
+import { createPoseEngine, CONNECTIONS, LANDMARK, SOURCE, STATUS, FACING, LENS, CAPTURE_STATE, CAPTURE_RESULT, CALIBRATION_STATE, CALIBRATION_RESULT, PREVIEW_JOINTS, POSE_EVENT, gradeFor, normalizeSequence, validCalibration, jointAngles, targetJointAngles, angleWithin, drawAngleArcs, drawVelocitySkeleton, depthIndicators, drawDepthIndicators, coincidenceFromBad, drawMatchJoints, drawMatchPercent } from "../engine/v2/index.js?v=0.7.1";
 import {
   APP_ID, APP_VERSION, CAMERA_KEY, LENS_KEY, CALIBRATION_KEY, DETAIL_KEY, DETAIL_ON, DETAIL_OFF, CALIBRATION_MAX, STATS_KEY, STAT, STATS, JOINT_RADIUS_PX, BONE_WIDTH_PX, THUMB_BONE_PX, THUMB_JOINT_PX,
   MIN_JOINT_VISIBILITY, MAX_DPR, PERCENT, COLOR, TEXT, POP_GRADE_MS, STATUS_MS, CAPTURED_MS, CONFIRM_MS, FLASH_MS, LUM_SAMPLE_MS,
@@ -7,7 +7,7 @@ import {
   DETAIL_ARC_PX, DETAIL_FONT_PX, DETAIL_MAX_BONE_PX, DETAIL_MAX_SPEED, DETAIL_TOL_DEG, DETAIL_DEPTH_BASE_PX, DETAIL_DEPTH_GROW_PX, DETAIL_MATCH_PX, DETAIL_PCT_PX, DETAIL_PCT_PAD_PX,
   NAME_MAX, DESCRIPTION_MAX,
 } from "./config.js";
-import { loadLibrary, saveLibrary, exportLibrary, parseImport, mergeLibrary, newId, nextName, playable } from "./library.js";
+import { loadLibrary, saveLibrary, exportLibrary, parseImport, mergeLibrary, newId, nextName, playable, resetLibrary } from "./library.js";
 import { metaUpdate, metaRead, crearEscritor, metaDeclararProyecto } from "./meta.js";
 
 const LEFT_PREFIX = "left_";
@@ -52,6 +52,7 @@ const ui = {
   countdown: $("countdown"), posesBtn: $("btn-poses"), movesBtn: $("btn-moves"), posesCount: $("poses-count"), movesCount: $("moves-count"),
   lib: $("lib"), libMain: $("lib-main"), libFoot: $("lib-foot"), libStatus: $("lib-status"), libClose: $("lib-close"),
   tabPoses: $("tab-poses"), tabMoves: $("tab-moves"), copy: $("btn-copy"), paste: $("btn-paste"), calibrate: $("btn-calibrate"),
+  resetLib: $("btn-reset-lib"), resetDialog: $("reset-confirm"), resetConfirm: $("btn-reset-confirm"), resetCancel: $("btn-reset-cancel"),
   stageHud: $("stage-hud"), stageReps: $("stage-reps-value"), stageRepsLabel: $("stage-reps-label"), stageTrack: $("stage-track-fill"),
   stageAlert: $("stage-alert"), stageFlash: $("stage-flash"), detail: $("btn-detail"),
 };
@@ -141,6 +142,26 @@ function syncEngine() {
 function commit() {
   saveLibrary(library);
   syncEngine();
+}
+
+function openReset() {
+  if (!ui.resetDialog.open) ui.resetDialog.showModal();
+}
+
+function closeReset() {
+  if (ui.resetDialog.open) ui.resetDialog.close();
+}
+
+function confirmReset() {
+  library = resetLibrary();
+  focusId = null;
+  editing = null;
+  if (sideMoveId && !library.movements.some((m) => m.id === sideMoveId)) sideMoveId = null;
+  syncEngine();
+  show(view === VIEW.MOVE ? VIEW.MOVES : view === VIEW.POSE ? VIEW.POSES : view);
+  renderSideList();
+  closeReset();
+  setStatus(TEXT.resetDone);
 }
 
 function poseById(id) {
@@ -1515,6 +1536,13 @@ ui.copy.addEventListener("click", copyLibrary);
 ui.paste.addEventListener("click", () => { importBack = view === VIEW.MOVES ? VIEW.MOVES : VIEW.POSES; show(VIEW.IMPORT); });
 ui.copy.textContent = TEXT.copy;
 ui.paste.textContent = TEXT.paste;
+ui.resetLib.textContent = TEXT.reset;
+ui.resetConfirm.textContent = TEXT.resetConfirm;
+ui.resetCancel.textContent = TEXT.cancel;
+ui.resetLib.addEventListener("click", openReset);
+ui.resetCancel.addEventListener("click", closeReset);
+ui.resetConfirm.addEventListener("click", confirmReset);
+ui.resetDialog.addEventListener("click", (e) => { if (e.target === ui.resetDialog) closeReset(); });
 
 $("btn-info").addEventListener("click", () => $("info").showModal());
 $("info").addEventListener("click", (e) => { if (e.target === $("info")) $("info").close(); });

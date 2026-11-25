@@ -16,8 +16,8 @@
   <title>Pose Engine</title>
   <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="assets/icon-180.png">
-  <link rel="manifest" href="manifest.json?v=0.7.0">
-  <link rel="stylesheet" href="css/styles.css?v=0.7.0">
+  <link rel="manifest" href="manifest.json?v=0.7.1">
+  <link rel="stylesheet" href="css/styles.css?v=0.7.1">
 </head>
 <body>
   <header class="bar">
@@ -164,10 +164,22 @@
           <button class="btn" type="button" id="btn-copy">Copiar datos</button>
           <button class="btn" type="button" id="btn-paste">Pegar datos</button>
         </div>
+        <button class="btn btn-reset" type="button" id="btn-reset-lib">Restablecer poses y movimientos</button>
       </div>
     </div>
   </dialog>
 
-  <script type="module" src="js/app.js?v=0.7.0"></script>
+  <dialog class="sheet reset" id="reset-confirm" aria-labelledby="reset-title">
+    <div class="sheet-body">
+      <h2 id="reset-title">Restablecer poses y movimientos</h2>
+      <p>Se perderán tus poses y movimientos propios y volverán las poses y movimientos de fábrica.</p>
+      <div class="reset-actions">
+        <button class="btn" type="button" id="btn-reset-cancel">Cancelar</button>
+        <button class="btn btn-danger" type="button" id="btn-reset-confirm">Restablecer</button>
+      </div>
+    </div>
+  </dialog>
+
+  <script type="module" src="js/app.js?v=0.7.1"></script>
 </body>
 </html>
