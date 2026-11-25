@@ -1,4 +1,4 @@
-import { SEGMENT_NAMES, PREVIEW_JOINTS, FEATURES_VERSION, normalizeSequence, upgradeFeatures } from "../engine/v2/index.js?v=0.8.0";
+import { SEGMENT_NAMES, PREVIEW_JOINTS, FEATURES_VERSION, normalizeSequence, upgradeFeatures } from "../engine/v2/index.js?v=0.8.1";
 import { LIBRARY_KEY, EXPORT_FORMAT, APP_ID, NAME_MAX, DESCRIPTION_MAX, SEEDED_KEY } from "./config.js";
 import { DEFAULTS_SEED_KEY, DEFAULTS_SEED, DEFAULT_POSES, DEFAULT_MOVEMENTS } from "./defaults.js";
 

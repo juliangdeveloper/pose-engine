@@ -36,6 +36,15 @@ await engine.start({ source: 'camera' });
 
 La detección usa solo poses y secuencias ordenadas de poses: ángulos articulares y posiciones relativas al torso, invariantes a la escala y a la posición en el cuadro. La velocidad y la aceleración se calculan en cada fotograma y quedan expuestas en `frame.motion` como datos para visualización y juegos, pero nunca deciden si una pose o un movimiento se detecta. El modo detallado del visor (arcos de ángulo, grosor por velocidad, profundidad y coincidencia) se dibuja con los helpers de `engine/v2/overlay.js`, exportados desde `index.js`, para reutilizarlos en otros proyectos.
 
+## Módulos de interfaz reutilizables
+
+La interfaz que usa la propia página vive en el motor para reutilizarla en otros proyectos. Cada módulo se monta en un elemento anfitrión y devuelve un objeto con `destroy` y callbacks; los textos se pasan como opciones y las clases propias (`pe-*`) evitan choques con la página anfitriona:
+
+- `engine/v2/library-ui.js` — `mountLibrary(host, opciones)`: biblioteca de poses y movimientos (lista, registro y edición, copiar/pegar datos, vaciar). Variantes `dialog` e `inline`.
+- `engine/v2/capture-ui.js` — `mountCapture(host, opciones)` y `mountPoseEditor(host, opciones)`: banner y cuenta de captura, y editor de la pose capturada. Variantes `banner` e `inline`.
+- `engine/v2/overlay-ui.js` — `createPoseOverlay(opciones)`: esqueleto, guía de calibración, fantasma de la pose y capas del modo detallado sobre la cámara. Estilos `silhouette` y `line`.
+- `engine/v2/reset-ui.js` — `mountReset(host, opciones)`: confirmación de restablecer, o botón directo con `confirm: false`.
+
 ## Stack
 
 JavaScript vanilla, PWA, MediaPipe PoseLandmarker lite, sin dependencias de npm.

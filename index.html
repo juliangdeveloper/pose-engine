@@ -16,8 +16,8 @@
   <title>Pose Engine</title>
   <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="assets/icon-180.png">
-  <link rel="manifest" href="manifest.json?v=0.8.0">
-  <link rel="stylesheet" href="css/styles.css?v=0.8.0">
+  <link rel="manifest" href="manifest.json?v=0.8.1">
+  <link rel="stylesheet" href="css/styles.css?v=0.8.1">
 </head>
 <body>
   <header class="bar">
@@ -63,12 +63,6 @@
         </svg>
         <span id="zoom-label">1×</span>
       </button>
-      <div class="capture-banner" id="capture-banner" hidden aria-live="polite">
-        <span class="capture-icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="12" cy="4.6" r="2"/><path d="M2.5 9h19M12 9v6.2M12 15.2l-3 6M12 15.2l3 6"/></svg></span>
-        <span class="capture-text"><span class="capture-title" id="capture-title"></span><span class="capture-hint" id="capture-hint"></span></span>
-        <span class="capture-hold" id="capture-hold" aria-hidden="true"></span>
-      </div>
-      <div class="countdown" id="countdown" hidden aria-hidden="true"></div>
       <div class="pop-grade" id="pop-grade" hidden aria-hidden="true"></div>
       <div class="stage-msg" id="stage-msg">
         <p id="stage-text"></p>
@@ -146,40 +140,6 @@
     </form>
   </dialog>
 
-  <dialog class="sheet lib" id="lib" aria-label="Poses y movimientos">
-    <div class="lib-body">
-      <div class="lib-head">
-        <div class="tabs" role="tablist">
-          <button class="tab" type="button" role="tab" id="tab-poses" data-tab="poses">Poses</button>
-          <button class="tab" type="button" role="tab" id="tab-moves" data-tab="moves">Movimientos</button>
-        </div>
-        <button class="close-btn" type="button" id="lib-close" aria-label="Cerrar">
-          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M6 6l12 12M18 6 6 18"/></svg>
-        </button>
-      </div>
-      <div class="lib-main" id="lib-main"></div>
-      <div class="lib-foot" id="lib-foot">
-        <p class="lib-status" id="lib-status" aria-live="polite"></p>
-        <div class="lib-actions">
-          <button class="btn" type="button" id="btn-copy">Copiar datos</button>
-          <button class="btn" type="button" id="btn-paste">Pegar datos</button>
-        </div>
-        <button class="btn btn-reset" type="button" id="btn-reset-lib">Vaciar biblioteca</button>
-      </div>
-    </div>
-  </dialog>
-
-  <dialog class="sheet reset" id="reset-confirm" aria-labelledby="reset-title">
-    <div class="sheet-body">
-      <h2 id="reset-title">Vaciar biblioteca</h2>
-      <p>Se perderán tus poses y movimientos propios y la biblioteca quedará vacía.</p>
-      <div class="reset-actions">
-        <button class="btn" type="button" id="btn-reset-cancel">Cancelar</button>
-        <button class="btn btn-danger" type="button" id="btn-reset-confirm">Restablecer</button>
-      </div>
-    </div>
-  </dialog>
-
-  <script type="module" src="js/app.js?v=0.8.0"></script>
+  <script type="module" src="js/app.js?v=0.8.1"></script>
 </body>
 </html>
