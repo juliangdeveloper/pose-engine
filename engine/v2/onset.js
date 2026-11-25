@@ -1,31 +1,22 @@
 import { SEGMENT } from "./features.js";
 
-export const ONSET_DEFAULTS = Object.freeze({ elbowDeg: 120, hysteresisDeg: 15, wristForwardSpeed: 0.9, restSpeed: 0.25, restMs: 300, side: "any" });
+export const ONSET_DEFAULTS = Object.freeze({ elbowDeg: 120, hysteresisDeg: 15, elbowAngVel: 120, restAngVel: 30, restMs: 300, side: "any" });
 export const ONSET_SIDE = Object.freeze({ ANY: "any", LEFT: "left", RIGHT: "right" });
 
-const SIDE_SEG = Object.freeze({
-  left: Object.freeze({ upper: SEGMENT.LEFT_UPPER_ARM, fore: SEGMENT.LEFT_FOREARM, wrist: "left_wrist" }),
-  right: Object.freeze({ upper: SEGMENT.RIGHT_UPPER_ARM, fore: SEGMENT.RIGHT_FOREARM, wrist: "right_wrist" }),
-});
-const RAD_TO_DEG = 180 / Math.PI;
+const SIDE_JOINT = Object.freeze({ left: "left_elbow", right: "right_elbow" });
 
-function elbowDeg(features, side) {
+function twistDeg(features) {
   const seg = features && features.seg;
-  const a = seg && seg[SIDE_SEG[side].upper];
-  const b = seg && seg[SIDE_SEG[side].fore];
+  const a = seg && seg[SEGMENT.SHOULDER_LINE];
+  const b = seg && seg[SEGMENT.HIP_LINE];
   if (!a || !b) return null;
-  const d = (a[0] * b[0] + a[1] * b[1] + a[2] * b[2]) / ((Math.hypot(a[0], a[1], a[2]) * Math.hypot(b[0], b[1], b[2])) || 1);
-  return 180 - Math.acos(Math.min(1, Math.max(-1, d))) * RAD_TO_DEG;
-}
-
-function forwardSpeed(motion, side) {
-  const j = motion && motion[SIDE_SEG[side].wrist];
-  return j && j.vel ? j.vel[2] : null;
+  const dot = (a[0] * b[0] + a[1] * b[1] + a[2] * b[2]) / ((Math.hypot(a[0], a[1], a[2]) * Math.hypot(b[0], b[1], b[2])) || 1);
+  return Math.acos(Math.min(1, Math.max(-1, dot))) * 180 / Math.PI;
 }
 
 function twistOk(rule, features) {
-  const twist = features.metrics ? features.metrics.twist : undefined;
-  if (typeof twist !== "number" || !isFinite(twist)) return false;
+  const twist = twistDeg(features);
+  if (twist === null) return false;
   if (typeof rule.twistMin === "number" && twist < rule.twistMin) return false;
   if (typeof rule.twistMax === "number" && twist > rule.twistMax) return false;
   return true;
@@ -49,28 +40,29 @@ export function createOnsetDetector(options) {
 
   function update(features, motion, t) {
     const fired = [];
-    if (!features || !motion) return fired;
+    if (!features || !motion || !motion.joints) return fired;
     defs.forEach((d) => {
       const rule = d.rule;
       const st = states.get(d.id);
       const sides = rule.side === ONSET_SIDE.LEFT ? ["left"] : rule.side === ONSET_SIDE.RIGHT ? ["right"] : ["left", "right"];
       sides.forEach((side) => {
         const s = st[side] || (st[side] = { armed: true, tStart: null, lastMove: 0 });
-        const deg = elbowDeg(features, side);
-        const speed = forwardSpeed(motion, side);
-        if (deg === null || speed === null) return;
-        if (speed >= rule.restSpeed) {
+        const joint = motion.joints[SIDE_JOINT[side]];
+        if (!joint || typeof joint.angle !== "number" || typeof joint.angVel !== "number") return;
+        const deg = joint.angle;
+        const angVel = Math.abs(joint.angVel);
+        if (angVel >= rule.restAngVel) {
           if (s.tStart === null) s.tStart = t;
           s.lastMove = t;
         } else if (s.tStart !== null && t - s.lastMove > rule.restMs) {
           s.tStart = null;
         }
         if (deg <= rule.elbowDeg - rule.hysteresisDeg) s.armed = true;
-        if (s.armed && deg >= rule.elbowDeg && speed >= rule.wristForwardSpeed && twistOk(rule, features)) {
+        if (s.armed && deg >= rule.elbowDeg && angVel >= rule.elbowAngVel && twistOk(rule, features)) {
           s.armed = false;
           const latencyMs = s.tStart === null ? 0 : t - s.tStart;
           s.tStart = null;
-          fired.push({ movement: d.id, name: d.name, side, latencyMs, elbow: deg, wristSpeed: speed, twist: features.metrics ? features.metrics.twist : null, at: t });
+          fired.push({ movement: d.id, name: d.name, side, latencyMs, elbow: deg, elbowAngVel: joint.angVel, twist: twistDeg(features), at: t });
         }
       });
     });

@@ -1,6 +1,6 @@
 import { LANDMARK, LANDMARK_COUNT, CONNECTIONS } from "./landmarks.js";
 import { createLandmarkSmoother, createOneEuroFilter, createVisibilityHold, SMOOTHING_DEFAULTS, HOLD_DEFAULTS } from "./smoothing.js";
-import { poseFeatures, averageFeatures, compareFeatures, upgradeFeatures, isTPose, bodyFrame, SEGMENT, SEGMENT_NAMES, MATCH_TOLERANCE, TPOSE_MAX_DEG, PREVIEW_JOINTS, FEATURES_VERSION, METRIC, CHECK_MARGIN } from "./features.js";
+import { poseFeatures, averageFeatures, compareFeatures, upgradeFeatures, isTPose, bodyFrame, SEGMENT, SEGMENT_NAMES, MATCH_TOLERANCE, TPOSE_MAX_DEG, PREVIEW_JOINTS, FEATURES_VERSION } from "./features.js";
 import { gradeFor, GRADE, GRADE_LABEL, GRADE_EXCELENTE_MIN, GRADE_BIEN_MIN } from "./grading.js";
 import { createPoseMatcher, MATCH_DEFAULTS } from "./matcher.js";
 import { createMovementTracker, normalizeSequence, MIN_SEQUENCE } from "./movements.js";
@@ -12,7 +12,7 @@ import { createMotionTracker } from "./motion.js";
 import { createOnsetDetector, ONSET_DEFAULTS, ONSET_SIDE } from "./onset.js";
 import { openCamera, closeCamera, retuneLens, readCameraState, emptyCameraState, FACING, LENS, CAMERA_ERROR, CameraError, CAMERA_RELEASE_MS } from "./camera.js";
 
-export const ENGINE_VERSION = "0.6.0";
+export const ENGINE_VERSION = "0.6.1";
 export const SOURCE = Object.freeze({ CAMERA: "camera", VIDEO: "video" });
 export const STATUS = Object.freeze({ LOADING_MODEL: "loading-model", OPENING_CAMERA: "opening-camera", RUNNING: "running", STOPPED: "stopped" });
 export const ENGINE_ERROR = Object.freeze(Object.assign({ MODEL_FAILED: "model-failed", DETECT_FAILED: "detect-failed", NO_VIDEO: "no-video" }, CAMERA_ERROR));
@@ -22,7 +22,7 @@ const FPS_SMOOTHING = 0.1;
 const MS_PER_S = 1000;
 
 export { LANDMARK, LANDMARK_COUNT, CONNECTIONS, SMOOTHING_DEFAULTS, HOLD_DEFAULTS, DEPTH_DEFAULTS, ONSET_DEFAULTS, ONSET_SIDE, DELEGATE, MODEL, TASKS_VISION_VERSION, FACING, LENS };
-export { SEGMENT, SEGMENT_NAMES, MATCH_TOLERANCE, MATCH_DEFAULTS, TPOSE_MAX_DEG, PREVIEW_JOINTS, FEATURES_VERSION, METRIC, CHECK_MARGIN, MIN_SEQUENCE };
+export { SEGMENT, SEGMENT_NAMES, MATCH_TOLERANCE, MATCH_DEFAULTS, TPOSE_MAX_DEG, PREVIEW_JOINTS, FEATURES_VERSION, MIN_SEQUENCE };
 export { GRADE, GRADE_LABEL, GRADE_EXCELENTE_MIN, GRADE_BIEN_MIN, CAPTURE_STATE, CAPTURE_RESULT, CAPTURE_DEFAULTS };
 export { CALIBRATION_STATE, CALIBRATION_RESULT, CALIBRATION_DEFAULTS, CALIBRATION_VERSION, BODY_PART };
 export { poseFeatures, averageFeatures, compareFeatures, upgradeFeatures, isTPose, bodyFrame, gradeFor, normalizeSequence };

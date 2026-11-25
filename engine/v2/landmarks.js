@@ -9,6 +9,18 @@ export const LANDMARK = Object.freeze({
 
 export const LANDMARK_COUNT = 33;
 
+export function scalePointsAround(points, factor, center) {
+  if (!points || !(factor > 0) || factor === 1 || !center) return points;
+  return points.map((p) => {
+    if (!p || !isFinite(p.x) || !isFinite(p.y)) return p;
+    return Object.assign({}, p, {
+      x: center.x + (p.x - center.x) * factor,
+      y: center.y + (p.y - center.y) * factor,
+      z: (center.z || 0) + ((p.z || 0) - (center.z || 0)) * factor,
+    });
+  });
+}
+
 export const CONNECTIONS = Object.freeze([
   ["left_shoulder", "right_shoulder"], ["left_hip", "right_hip"],
   ["left_shoulder", "left_hip"], ["right_shoulder", "right_hip"],

@@ -4,7 +4,7 @@ import { bodyFrame, isTPose, LIMB_SEGMENTS, MATCH_TOLERANCE } from "./features.j
 export const CALIBRATION_VERSION = 1;
 export const CALIBRATION_STATE = Object.freeze({ IDLE: "idle", WAITING: "waiting", HOLDING: "holding" });
 export const CALIBRATION_RESULT = Object.freeze({ CALIBRATED: "calibrated" });
-export const CALIBRATION_DEFAULTS = Object.freeze({ holdMs: 1500, maxMotion: 0.06, minNoseDepth: 0.02 });
+export const CALIBRATION_DEFAULTS = Object.freeze({ holdMs: 1500, maxMotion: 0.11, minNoseDepth: 0.02 });
 export const BODY_PART = Object.freeze({ LEFT_ARM: "leftArm", RIGHT_ARM: "rightArm", LEFT_LEG: "leftLeg", RIGHT_LEG: "rightLeg" });
 
 const PART_SEGMENTS = Object.freeze({
@@ -15,7 +15,6 @@ const PART_SEGMENTS = Object.freeze({
 });
 const SHOULDERS = [LANDMARK.left_shoulder, LANDMARK.right_shoulder];
 const HIPS = [LANDMARK.left_hip, LANDMARK.right_hip];
-const ANKLES = [LANDMARK.left_ankle, LANDMARK.right_ankle];
 const ROUND = 1000;
 
 function round(v) {
@@ -76,14 +75,7 @@ export function computeCalibration(samples, options) {
   const shoulderWidth = median(frames.map((s) => dist(s.world[SHOULDERS[0]], s.world[SHOULDERS[1]])));
   const hipWidth = median(frames.map((s) => dist(s.world[HIPS[0]], s.world[HIPS[1]])));
   const torso = median(frames.map((s) => dist(mid(s.world, SHOULDERS), mid(s.world, HIPS))));
-  const up = { x: -dx / dn, y: -dy / dn, z: -dz / dn };
-  const heights = frames.filter((s) => ANKLES.every((i) => finite(s.world[i]))).map((s) => {
-    const mS = mid(s.world, SHOULDERS);
-    const mA = mid(s.world, ANKLES);
-    return (mS.x - mA.x) * up.x + (mS.y - mA.y) * up.y + (mS.z - mA.z) * up.z;
-  });
   const body = { shoulderWidth: round(shoulderWidth), hipWidth: round(hipWidth), torso: round(torso) };
-  if (heights.length) body.shoulderHeight = round(median(heights));
   return {
     v: CALIBRATION_VERSION,
     down: [round(dx / dn), round(dy / dn), round(dz / dn)],
@@ -130,7 +122,9 @@ export function createCalibrationFlow(options) {
   function moved(world) {
     if (!anchor || !world) return false;
     const m = mid(world, SHOULDERS);
-    return dist(m, anchor) > o.maxMotion;
+    const torso = dist(mid(world, SHOULDERS), mid(world, HIPS));
+    if (!(torso > 0)) return false;
+    return dist(m, anchor) / torso > o.maxMotion;
   }
 
   function update(features, landmarks, world, t) {

@@ -1,4 +1,4 @@
-import { LANDMARK } from "./landmarks.js";
+import { LANDMARK, scalePointsAround } from "./landmarks.js";
 
 export const DEPTH_DEFAULTS = Object.freeze({ geoWeight: 0.6, geoWeightForeshortened: 0.9, decay: 0.999, spanDeg: 155 });
 
@@ -37,6 +37,7 @@ export function createDepthEstimator(options) {
   const o = Object.assign({}, DEPTH_DEFAULTS, options);
   const lengths = {};
   const signs = {};
+  let canonical = 0;
 
   function lengthFor(name, observed, cal) {
     const est = Math.max(observed, (lengths[name] || 0) * o.decay, (cal && cal.len && cal.len[name]) || 0);
@@ -44,8 +45,22 @@ export function createDepthEstimator(options) {
     return est;
   }
 
+  function normalize(world, cal) {
+    const w = (n) => world[LANDMARK[n]];
+    const torsoPts = [w("left_shoulder"), w("right_shoulder"), w("left_hip"), w("right_hip")];
+    if (!torsoPts.every(finite)) return world;
+    const midShoulder = mid(w("left_shoulder"), w("right_shoulder"));
+    const midHip = mid(w("left_hip"), w("right_hip"));
+    const current = dist3(midShoulder, midHip);
+    if (!(current > EPS)) return world;
+    const target = (cal && cal.body && cal.body.torso) || canonical || current;
+    canonical = target;
+    return scalePointsAround(world, target / current, midHip);
+  }
+
   function apply(landmarks, world, cal, aspect) {
     if (!world || !landmarks || world.length !== landmarks.length) return world;
+    world = normalize(world, cal);
     const k = typeof aspect === "number" && aspect > 0 ? aspect : 1;
     const w = (n) => world[LANDMARK[n]];
     const l2 = (n) => landmarks[LANDMARK[n]];
@@ -101,6 +116,7 @@ export function createDepthEstimator(options) {
   function reset() {
     Object.keys(lengths).forEach((k) => delete lengths[k]);
     Object.keys(signs).forEach((k) => delete signs[k]);
+    canonical = 0;
   }
 
   return { apply, reset };

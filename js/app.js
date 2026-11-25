@@ -1,9 +1,9 @@
-import { createPoseEngine, CONNECTIONS, LANDMARK, SOURCE, STATUS, FACING, LENS, CAPTURE_STATE, CAPTURE_RESULT, CALIBRATION_STATE, CALIBRATION_RESULT, PREVIEW_JOINTS, POSE_EVENT, gradeFor, normalizeSequence, validCalibration } from "../engine/v2/index.js?v=0.6.0";
+import { createPoseEngine, CONNECTIONS, LANDMARK, SOURCE, STATUS, FACING, LENS, CAPTURE_STATE, CAPTURE_RESULT, CALIBRATION_STATE, CALIBRATION_RESULT, PREVIEW_JOINTS, POSE_EVENT, gradeFor, normalizeSequence, validCalibration } from "../engine/v2/index.js?v=0.6.1";
 import {
   APP_ID, APP_VERSION, CAMERA_KEY, LENS_KEY, CALIBRATION_KEY, CALIBRATION_MAX, STATS_KEY, STAT, STATS, JOINT_RADIUS_PX, BONE_WIDTH_PX, THUMB_BONE_PX, THUMB_JOINT_PX,
   MIN_JOINT_VISIBILITY, MAX_DPR, PERCENT, COLOR, TEXT, POP_GRADE_MS, STATUS_MS, CAPTURED_MS, CONFIRM_MS, FLASH_MS, LUM_SAMPLE_MS,
-  GUIDE_BONE_PX, GUIDE_JOINT_PX, GUIDE_VISIBILITY, GUIDE_H_TOL, GUIDE_V_TOL, GUIDE_ALPHA, GHOST_BONE_PX, GHOST_JOINT_PX, GHOST_TOL_RATIO, GHOST_ALPHA,
-  GHOST_MARGIN, FADE_FLOOR, OUTSIDE_FADE, FRAME_MIN_HEIGHT, FRAME_MAX_HEIGHT, FRAME_PAD, LUM_SIZE, LUM_DARK, LUM_CENTER_MAX, LUM_CONTRAST, T_GUIDE,
+  GUIDE_VISIBILITY, GUIDE_H_TOL, GUIDE_V_TOL, GHOST_TOL_RATIO,
+  GHOST_MARGIN, SIL_TORSO_RATIO, SIL_ARM_RATIO, SIL_LEG_RATIO, SIL_HEAD_RATIO, SIL_ALPHA, FADE_FLOOR, OUTSIDE_FADE, FRAME_MIN_HEIGHT, FRAME_MAX_HEIGHT, FRAME_PAD, LUM_SIZE, LUM_DARK, LUM_CENTER_MAX, LUM_CONTRAST, T_GUIDE,
   NAME_MAX, DESCRIPTION_MAX,
 } from "./config.js";
 import { loadLibrary, saveLibrary, exportLibrary, parseImport, mergeLibrary, newId, nextName, playable } from "./library.js";
@@ -106,6 +106,9 @@ const lumCanvas = document.createElement("canvas");
 lumCanvas.width = LUM_SIZE;
 lumCanvas.height = LUM_SIZE;
 const lumCtx = lumCanvas.getContext("2d", { willReadFrequently: true });
+const silCanvas = document.createElement("canvas");
+const silCtx = silCanvas.getContext("2d");
+const T_GUIDE_PTS = PREVIEW_JOINTS.map((name) => T_GUIDE[name] || null);
 
 function loadStats() {
   const empty = { [STAT.REPS_TOTAL]: 0, [STAT.CAPTURES_TOTAL]: 0 };
@@ -632,41 +635,101 @@ function draw(frame) {
   const box = fit(frame);
   const px = (p) => ({ x: box.x + (frame.mirrored ? 1 - p.x : p.x) * box.w, y: box.y + p.y * box.h });
   const calibrating = engine.calibrating();
-  if (calibrating) drawGuide(lm, box, frame.mirrored);
+  if (calibrating) drawGuide(frame, px);
   else drawGhost(frame, box, px);
   drawSkeleton(lm, box, px);
 }
 
-function drawGuide(lm, box, mirrored) {
+function boneRatio(index) {
+  if (index <= 3) return SIL_TORSO_RATIO;
+  if (index <= 7) return SIL_ARM_RATIO;
+  return SIL_LEG_RATIO;
+}
+
+function drawSilhouette(mapped, px, styleOfBone, styleOfJoint) {
+  const w = stage.clientWidth;
+  const h = stage.clientHeight;
+  if (!w || !h) return;
+  const dpr = Math.min(window.devicePixelRatio || 1, MAX_DPR);
+  if (silCanvas.width !== Math.round(w * dpr) || silCanvas.height !== Math.round(h * dpr)) {
+    silCanvas.width = Math.round(w * dpr);
+    silCanvas.height = Math.round(h * dpr);
+  }
+  silCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  silCtx.clearRect(0, 0, w, h);
+  silCtx.lineCap = "round";
+  silCtx.lineJoin = "round";
+  const jointRadius = new Array(mapped.length).fill(0);
+  const jointColor = new Array(mapped.length).fill(null);
+  THUMB_BONES.forEach(([a, b], i) => {
+    const A = mapped[a];
+    const B = mapped[b];
+    if (!A || !B) return;
+    const PA = px(A);
+    const PB = px(B);
+    const len = Math.hypot(PB.x - PA.x, PB.y - PA.y);
+    if (!(len > 0)) return;
+    const style = styleOfBone(i);
+    const width = Math.max(3, len * boneRatio(i));
+    silCtx.strokeStyle = style.color;
+    silCtx.lineWidth = width;
+    silCtx.beginPath();
+    silCtx.moveTo(PA.x, PA.y);
+    silCtx.lineTo(PB.x, PB.y);
+    silCtx.stroke();
+    [a, b].forEach((j) => {
+      jointRadius[j] = Math.max(jointRadius[j], width * 0.52);
+      jointColor[j] = style.color;
+    });
+  });
+  const nose = mapped[NOSE_INDEX];
+  const shoulderL = mapped[PREVIEW_JOINTS.indexOf("left_shoulder")];
+  const shoulderR = mapped[PREVIEW_JOINTS.indexOf("right_shoulder")];
+  if (nose && shoulderL && shoulderR) {
+    const N = px(nose);
+    const sl = px(shoulderL);
+    const sr = px(shoulderR);
+    const mid = { x: (sl.x + sr.x) / 2, y: (sl.y + sr.y) / 2 };
+    const radius = Math.max(5, Math.hypot(N.x - mid.x, N.y - mid.y) * SIL_HEAD_RATIO);
+    silCtx.fillStyle = styleOfBone(0).color;
+    silCtx.beginPath();
+    silCtx.arc(N.x, N.y, radius, 0, Math.PI * 2);
+    silCtx.fill();
+  }
+  mapped.forEach((g, i) => {
+    if (!g || !jointRadius[i]) return;
+    const G = px(g);
+    silCtx.fillStyle = styleOfJoint && styleOfJoint(i) ? styleOfJoint(i).color : jointColor[i];
+    silCtx.beginPath();
+    silCtx.arc(G.x, G.y, jointRadius[i], 0, Math.PI * 2);
+    silCtx.fill();
+  });
   ctx.save();
-  ctx.lineCap = "round";
-  ctx.lineWidth = GUIDE_BONE_PX;
-  GUIDE_BONES.forEach(([aName, bName, orient]) => {
-    const ta = T_GUIDE[aName];
-    const tb = T_GUIDE[bName];
-    if (!ta || !tb) return;
-    const A = { x: box.x + (mirrored ? 1 - ta[0] : ta[0]) * box.w, y: box.y + ta[1] * box.h };
-    const B = { x: box.x + (mirrored ? 1 - tb[0] : tb[0]) * box.w, y: box.y + tb[1] * box.h };
-    const ok = segmentCovered(lm, aName, bName, orient);
-    ctx.globalAlpha = GUIDE_ALPHA;
-    ctx.strokeStyle = ok ? COLOR.guideOk : COLOR.guideWait;
-    if (ok) ctx.globalAlpha = 1;
-    ctx.beginPath();
-    ctx.moveTo(A.x, A.y);
-    ctx.lineTo(B.x, B.y);
-    ctx.stroke();
-  });
-  ctx.fillStyle = COLOR.joint;
-  Object.keys(T_GUIDE).forEach((name) => {
-    const t = T_GUIDE[name];
-    const P = { x: box.x + (mirrored ? 1 - t[0] : t[0]) * box.w, y: box.y + t[1] * box.h };
-    ctx.globalAlpha = GUIDE_ALPHA;
-    ctx.beginPath();
-    ctx.arc(P.x, P.y, GUIDE_JOINT_PX, 0, Math.PI * 2);
-    ctx.fill();
-  });
+  ctx.globalAlpha = SIL_ALPHA;
+  ctx.drawImage(silCanvas, 0, 0, w, h);
   ctx.restore();
   ctx.globalAlpha = 1;
+}
+
+function drawGuide(frame, px) {
+  const mapped = ghostMapped(T_GUIDE_PTS, frame.landmarks, frame.mirrored);
+  if (!mapped) return;
+  const covered = {};
+  GUIDE_BONES.forEach(([aName, bName, orient]) => {
+    covered[aName + "|" + bName] = segmentCovered(frame.landmarks, aName, bName, orient);
+  });
+  const styleOfBone = (i) => {
+    const aName = PREVIEW_JOINTS[THUMB_BONES[i][0]];
+    const bName = PREVIEW_JOINTS[THUMB_BONES[i][1]];
+    const ok = covered[aName + "|" + bName] === true || (aName === "left_hip" && bName === "right_hip" ? covered["left_shoulder|right_shoulder"] === true : false);
+    return { color: ok ? COLOR.guideOk : COLOR.guideBad };
+  };
+  const styleOfJoint = (i) => {
+    const name = PREVIEW_JOINTS[i];
+    const bad = GUIDE_BONES.some(([aName, bName]) => (aName === name || bName === name) && covered[aName + "|" + bName] !== true);
+    return { color: bad ? COLOR.guideBad : COLOR.guideOk };
+  };
+  drawSilhouette(mapped, px, styleOfBone, styleOfJoint);
 }
 
 function drawGhost(frame, box, px) {
@@ -678,43 +741,20 @@ function drawGhost(frame, box, px) {
   if (!mapped) return;
   const h = Math.max(box.h, 1);
   const tol = GHOST_TOL_RATIO * h;
-  ctx.save();
-  ctx.lineCap = "round";
-  ctx.lineWidth = GHOST_BONE_PX;
-  ctx.setLineDash([8, 5]);
-  ctx.globalAlpha = GHOST_ALPHA;
-  ctx.strokeStyle = COLOR.ghost;
-  GHOST_BONES.forEach(([a, b]) => {
-    const A = mapped[a];
-    const B = mapped[b];
-    if (!A || !B) return;
-    const PA = px(A);
-    const PB = px(B);
-    ctx.beginPath();
-    ctx.moveTo(PA.x, PA.y);
-    ctx.lineTo(PB.x, PB.y);
-    ctx.stroke();
-  });
-  ctx.setLineDash([]);
+  const bad = new Array(mapped.length).fill(false);
   mapped.forEach((g, i) => {
     if (!g) return;
     const name = PREVIEW_JOINTS[i];
     const player = frame.landmarks && frame.landmarks[LANDMARK[name]];
-    let bad = false;
     if (player && visibilityOf(player) >= MIN_JOINT_VISIBILITY && isFinite(player.x) && isFinite(player.y)) {
       const P = px(player);
       const G = px(g);
-      bad = Math.hypot(P.x - G.x, P.y - G.y) > tol;
+      bad[i] = Math.hypot(P.x - G.x, P.y - G.y) > tol;
     }
-    const G = px(g);
-    ctx.fillStyle = bad ? COLOR.ghostBad : COLOR.ghost;
-    ctx.globalAlpha = GHOST_ALPHA;
-    ctx.beginPath();
-    ctx.arc(G.x, G.y, GHOST_JOINT_PX, 0, Math.PI * 2);
-    ctx.fill();
   });
-  ctx.restore();
-  ctx.globalAlpha = 1;
+  const styleOfBone = (i) => ({ color: bad[THUMB_BONES[i][0]] || bad[THUMB_BONES[i][1]] ? COLOR.ghostBad : COLOR.ghost });
+  const styleOfJoint = (i) => ({ color: bad[i] ? COLOR.ghostBad : COLOR.ghost });
+  drawSilhouette(mapped, px, styleOfBone, styleOfJoint);
 }
 
 function drawSkeleton(lm, box, px) {

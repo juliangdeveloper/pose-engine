@@ -1,4 +1,4 @@
-import { SEGMENT_NAMES, PREVIEW_JOINTS, FEATURES_VERSION, normalizeSequence, upgradeFeatures } from "../engine/v2/index.js?v=0.6.0";
+import { SEGMENT_NAMES, PREVIEW_JOINTS, FEATURES_VERSION, normalizeSequence, upgradeFeatures } from "../engine/v2/index.js?v=0.6.1";
 import { LIBRARY_KEY, EXPORT_FORMAT, APP_ID, NAME_MAX, DESCRIPTION_MAX, SEEDED_KEY } from "./config.js";
 import { DEFAULTS_SEED_KEY, DEFAULTS_SEED, DEFAULT_POSES, DEFAULT_MOVEMENTS } from "./defaults.js";
 
@@ -19,26 +19,11 @@ function finiteList(v, len) {
   return Array.isArray(v) && v.length === len && v.every((n) => typeof n === "number" && isFinite(n));
 }
 
-function cleanChecks(list) {
-  if (!Array.isArray(list)) return null;
-  const out = [];
-  list.forEach((c) => {
-    if (!c || typeof c !== "object" || typeof c.m !== "string" || !c.m) return;
-    const item = { m: c.m };
-    if (typeof c.min === "number" && isFinite(c.min)) item.min = c.min;
-    if (typeof c.max === "number" && isFinite(c.max)) item.max = c.max;
-    if (typeof c.weight === "number" && isFinite(c.weight) && c.weight > 0) item.weight = c.weight;
-    if (item.min === undefined && item.max === undefined) return;
-    out.push(item);
-  });
-  return out.length ? out : null;
-}
-
 function cleanOnset(raw) {
   if (!raw || typeof raw !== "object") return null;
   const out = {};
   if (raw.side === "left" || raw.side === "right" || raw.side === "any") out.side = raw.side;
-  ["elbowDeg", "hysteresisDeg", "wristForwardSpeed", "restSpeed", "restMs", "twistMin", "twistMax"].forEach((k) => {
+  ["elbowDeg", "hysteresisDeg", "elbowAngVel", "restAngVel", "restMs", "twistMin", "twistMax"].forEach((k) => {
     if (typeof raw[k] === "number" && isFinite(raw[k])) out[k] = raw[k];
   });
   return Object.keys(out).length ? out : null;
@@ -55,8 +40,6 @@ function cleanPose(raw) {
     const v = p.vis && p.vis[name];
     vis[name] = typeof v === "number" && isFinite(v) ? Math.min(1, Math.max(0, v)) : 1;
   });
-  const checks = cleanChecks(p.checks);
-  if (!Object.keys(seg).length && !checks) return null;
   const pts = Array.isArray(p.pts) && p.pts.length === PREVIEW_JOINTS.length ? p.pts.map((q) => (finiteList(q, POINT_LEN) ? q.slice() : null)) : [];
   const name = text(p.name, NAME_MAX);
   const out = {
@@ -67,7 +50,6 @@ function cleanPose(raw) {
     v: FEATURES_VERSION,
     seg, vis, pts,
   };
-  if (checks) out.checks = checks;
   if (p.alt === true) out.alt = true;
   return out;
 }
@@ -136,8 +118,9 @@ function applyDefaults(lib) {
     const cleaned = d ? cleanPose(d) : null;
     if (!cleaned) return p;
     const next = Object.assign({}, p, { v: cleaned.v, seg: cleaned.seg, vis: cleaned.vis, pts: cleaned.pts });
-    if (cleaned.checks) next.checks = cleaned.checks;
+    delete next.checks;
     if (cleaned.alt) next.alt = true;
+    else delete next.alt;
     return next;
   });
   DEFAULT_POSES.forEach((p) => {
@@ -146,7 +129,15 @@ function applyDefaults(lib) {
     if (cleaned) poses.push(cleaned);
   });
   const known = new Set(poses.map((p) => p.id));
-  const movements = lib.movements.slice();
+  const movements = lib.movements.map((m) => {
+    const d = DEFAULT_MOVEMENTS.find((q) => q.id === m.id);
+    const cleaned = d ? cleanMove(d, known) : null;
+    if (!cleaned) return m;
+    const next = Object.assign({}, m);
+    if (cleaned.onset) next.onset = cleaned.onset;
+    else delete next.onset;
+    return next;
+  });
   DEFAULT_MOVEMENTS.forEach((m) => {
     if (seeded.has(m.id) || movements.some((q) => q.id === m.id)) return;
     const cleaned = cleanMove(m, known);

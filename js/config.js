@@ -1,5 +1,5 @@
 export const APP_ID = "pose-engine";
-export const APP_VERSION = "0.6.0";
+export const APP_VERSION = "0.6.1";
 export const STATS_KEY = "pose-engine.stats";
 export const CAMERA_KEY = "pose-engine.camera";
 export const LENS_KEY = "pose-engine.lens";
@@ -41,6 +41,11 @@ export const GHOST_JOINT_PX = 3;
 export const GHOST_TOL_RATIO = 0.09;
 export const GHOST_ALPHA = 0.75;
 export const GHOST_MARGIN = 1.15;
+export const SIL_TORSO_RATIO = 0.6;
+export const SIL_ARM_RATIO = 0.3;
+export const SIL_LEG_RATIO = 0.36;
+export const SIL_HEAD_RATIO = 0.5;
+export const SIL_ALPHA = 0.55;
 export const FADE_FLOOR = 0.18;
 export const OUTSIDE_FADE = 0.4;
 export const FRAME_MIN_HEIGHT = 0.45;
@@ -76,6 +81,7 @@ export const COLOR = Object.freeze({
   thumbJoint: "#f2f4f8",
   guideWait: "rgba(255,255,255,0.42)",
   guideOk: "#3ddc97",
+  guideBad: "#ffb547",
   ghost: "#5aa9ff",
   ghostBad: "#ff6b6b",
 });
@@ -102,10 +108,10 @@ export const TEXT = Object.freeze({
   releaseFirst: "Baja los brazos y haz la pose T para capturar",
   calibrate: "Calibrar",
   calibrateSkip: "Omitir",
-  calWait: "Haz la pose T para calibrar",
-  calWaitHint: "Brazos rectos a los lados, todo el cuerpo a la vista",
-  calHold: "Quieto en la pose T",
-  calHoldHint: "Midiendo tu cuerpo",
+  calWait: "Haz la pose T",
+  calWaitHint: "",
+  calHold: "Quieto…",
+  calHoldHint: "",
   calDone: "Calibrado",
   calPartial: "Se comparan solo las partes que se ven",
   missing: (parts) => {
