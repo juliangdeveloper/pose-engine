@@ -1,4 +1,4 @@
-import { SEGMENT_NAMES, PREVIEW_JOINTS, FEATURES_VERSION, normalizeSequence, upgradeFeatures } from "../engine/v2/index.js?v=0.7.1";
+import { SEGMENT_NAMES, PREVIEW_JOINTS, FEATURES_VERSION, normalizeSequence, upgradeFeatures } from "../engine/v2/index.js?v=0.7.2";
 import { LIBRARY_KEY, EXPORT_FORMAT, APP_ID, NAME_MAX, DESCRIPTION_MAX, SEEDED_KEY } from "./config.js";
 import { DEFAULTS_SEED_KEY, DEFAULTS_SEED, DEFAULT_POSES, DEFAULT_MOVEMENTS } from "./defaults.js";
 
@@ -81,6 +81,8 @@ function writeSeed(n) {
 }
 
 const LEGACY_SEED_IDS = Object.freeze(["p-flexion-arriba", "p-flexion-abajo", "p-dominada-arriba", "p-dominada-abajo", "m-flexion-completa", "m-dominada"]);
+const REMOVED_POSE_IDS = Object.freeze(["p-guardia", "p-jab", "p-cross", "p-esquive"]);
+const REMOVED_MOVE_IDS = Object.freeze(["m-jab", "m-cross", "m-esquive"]);
 
 function readSeeded() {
   try {
@@ -100,7 +102,13 @@ function applyDefaults(lib) {
   const seed = readSeed();
   if (seed >= DEFAULTS_SEED) return lib;
   const seeded = readSeeded();
-  const poses = lib.poses.map((p) => {
+  REMOVED_POSE_IDS.forEach((id) => seeded.delete(id));
+  REMOVED_MOVE_IDS.forEach((id) => seeded.delete(id));
+  const kept = {
+    poses: lib.poses.filter((p) => REMOVED_POSE_IDS.indexOf(p.id) === -1),
+    movements: lib.movements.filter((m) => REMOVED_MOVE_IDS.indexOf(m.id) === -1).map((m) => Object.assign({}, m, { sequence: (Array.isArray(m.sequence) ? m.sequence : []).filter((id) => REMOVED_POSE_IDS.indexOf(id) === -1) })),
+  };
+  const poses = kept.poses.map((p) => {
     const d = DEFAULT_POSES.find((q) => q.id === p.id);
     const cleaned = d ? cleanPose(d) : null;
     if (!cleaned) return p;
@@ -116,7 +124,7 @@ function applyDefaults(lib) {
     if (cleaned) poses.push(cleaned);
   });
   const known = new Set(poses.map((p) => p.id));
-  const movements = lib.movements.map((m) => {
+  const movements = kept.movements.map((m) => {
     const d = DEFAULT_MOVEMENTS.find((q) => q.id === m.id);
     const cleaned = d ? cleanMove(d, known) : null;
     if (!cleaned) return m;

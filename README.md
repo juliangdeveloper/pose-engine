@@ -15,7 +15,7 @@
 - Toca el icono de detalle en el visor para encender el modo detallado: arcos con los grados en cada articulación, esqueleto más grueso en los segmentos rápidos, puntos de profundidad cuando un brazo apunta a la cámara y articulaciones en verde o rojo con porcentaje de coincidencia.
 - Ajusta distancia y luz con los avisos «Aléjate un paso», «Acércate», «Entra en el cuadro», «Poca luz» y «Contraluz» antes de empezar.
 - Captura tus poses con la cámara: haz la pose T y, tras la cuenta de 3 segundos, se guarda la pose en la que estés.
-- Arma movimientos con secuencias de tus poses capturadas, por ejemplo guardia → jab.
+- Arma movimientos con secuencias de tus poses capturadas, por ejemplo Flexión arriba → Flexión abajo.
 - Restablece las poses y movimientos de fábrica con «Restablecer poses y movimientos» en Poses o Movimientos: se pierden las propias.
 - Cuenta repeticiones con contador grande, barra de recorrido y destello en el borde: verde al contar, rojo si quedó a medias.
 
