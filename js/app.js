@@ -1,9 +1,10 @@
-import { createPoseEngine, CONNECTIONS, LANDMARK, SOURCE, STATUS, FACING, LENS, CAPTURE_STATE, CAPTURE_RESULT, CALIBRATION_STATE, CALIBRATION_RESULT, PREVIEW_JOINTS, POSE_EVENT, gradeFor, normalizeSequence, validCalibration } from "../engine/v2/index.js?v=0.6.1";
+import { createPoseEngine, CONNECTIONS, LANDMARK, SOURCE, STATUS, FACING, LENS, CAPTURE_STATE, CAPTURE_RESULT, CALIBRATION_STATE, CALIBRATION_RESULT, PREVIEW_JOINTS, POSE_EVENT, gradeFor, normalizeSequence, validCalibration, jointAngles, targetJointAngles, angleWithin, drawAngleArcs, drawVelocitySkeleton, depthIndicators, drawDepthIndicators, coincidenceFromBad, drawMatchJoints, drawMatchPercent } from "../engine/v2/index.js?v=0.7.0";
 import {
-  APP_ID, APP_VERSION, CAMERA_KEY, LENS_KEY, CALIBRATION_KEY, CALIBRATION_MAX, STATS_KEY, STAT, STATS, JOINT_RADIUS_PX, BONE_WIDTH_PX, THUMB_BONE_PX, THUMB_JOINT_PX,
+  APP_ID, APP_VERSION, CAMERA_KEY, LENS_KEY, CALIBRATION_KEY, DETAIL_KEY, DETAIL_ON, DETAIL_OFF, CALIBRATION_MAX, STATS_KEY, STAT, STATS, JOINT_RADIUS_PX, BONE_WIDTH_PX, THUMB_BONE_PX, THUMB_JOINT_PX,
   MIN_JOINT_VISIBILITY, MAX_DPR, PERCENT, COLOR, TEXT, POP_GRADE_MS, STATUS_MS, CAPTURED_MS, CONFIRM_MS, FLASH_MS, LUM_SAMPLE_MS,
   GUIDE_VISIBILITY, GUIDE_H_TOL, GUIDE_V_TOL, GHOST_TOL_RATIO,
   GHOST_MARGIN, SIL_TORSO_RATIO, SIL_ARM_RATIO, SIL_LEG_RATIO, SIL_HEAD_RATIO, SIL_ALPHA, FADE_FLOOR, OUTSIDE_FADE, FRAME_MIN_HEIGHT, FRAME_MAX_HEIGHT, FRAME_PAD, LUM_SIZE, LUM_DARK, LUM_CENTER_MAX, LUM_CONTRAST, T_GUIDE,
+  DETAIL_ARC_PX, DETAIL_FONT_PX, DETAIL_MAX_BONE_PX, DETAIL_MAX_SPEED, DETAIL_TOL_DEG, DETAIL_DEPTH_BASE_PX, DETAIL_DEPTH_GROW_PX, DETAIL_MATCH_PX, DETAIL_PCT_PX, DETAIL_PCT_PAD_PX,
   NAME_MAX, DESCRIPTION_MAX,
 } from "./config.js";
 import { loadLibrary, saveLibrary, exportLibrary, parseImport, mergeLibrary, newId, nextName, playable } from "./library.js";
@@ -52,7 +53,7 @@ const ui = {
   lib: $("lib"), libMain: $("lib-main"), libFoot: $("lib-foot"), libStatus: $("lib-status"), libClose: $("lib-close"),
   tabPoses: $("tab-poses"), tabMoves: $("tab-moves"), copy: $("btn-copy"), paste: $("btn-paste"), calibrate: $("btn-calibrate"),
   stageHud: $("stage-hud"), stageReps: $("stage-reps-value"), stageRepsLabel: $("stage-reps-label"), stageTrack: $("stage-track-fill"),
-  stageAlert: $("stage-alert"), stageFlash: $("stage-flash"),
+  stageAlert: $("stage-alert"), stageFlash: $("stage-flash"), detail: $("btn-detail"),
 };
 
 function readKey(key, allowed, fallback) {
@@ -75,6 +76,7 @@ function writeKey(key, value) {
 }
 
 let library = loadLibrary();
+let detailOn = readKey(DETAIL_KEY, [DETAIL_ON, DETAIL_OFF], DETAIL_OFF) === DETAIL_ON;
 const engine = createPoseEngine({
   video,
   facingMode: readKey(CAMERA_KEY, [FACING.USER, FACING.ENVIRONMENT], FACING.USER),
@@ -586,6 +588,11 @@ function renderZoom() {
   ui.zoomLabel.textContent = wide ? ZOOM_LABEL.WIDE : ZOOM_LABEL.NORMAL;
 }
 
+function renderDetailButton() {
+  ui.detail.setAttribute("aria-pressed", String(detailOn));
+  ui.detail.setAttribute("aria-label", TEXT.detail);
+}
+
 function renderCameraChrome() {
   const mode = engine.getState().facingMode;
   ui.flip.setAttribute("aria-pressed", String(mode === FACING.ENVIRONMENT));
@@ -635,9 +642,59 @@ function draw(frame) {
   const box = fit(frame);
   const px = (p) => ({ x: box.x + (frame.mirrored ? 1 - p.x : p.x) * box.w, y: box.y + p.y * box.h });
   const calibrating = engine.calibrating();
-  if (calibrating) drawGuide(frame, px);
-  else drawGhost(frame, box, px);
-  drawSkeleton(lm, box, px);
+  const target = calibrating ? drawGuide(frame, px) : drawGhost(frame, box, px);
+  if (detailOn) drawSkeletonDetail(frame, lm, px);
+  else drawSkeleton(lm, box, px);
+  if (detailOn) drawDetail(frame, px, target);
+}
+
+function boneColor(a, b) {
+  return leftJoints.has(a) && leftJoints.has(b) ? COLOR.boneLeft : leftJoints.has(a) || leftJoints.has(b) ? COLOR.bone : COLOR.boneRight;
+}
+
+function drawSkeletonDetail(frame, lm, px) {
+  drawVelocitySkeleton(ctx, lm, CONNECTIONS, frame.motion, px, {
+    baseWidthPx: BONE_WIDTH_PX,
+    maxBonePx: DETAIL_MAX_BONE_PX,
+    maxAngVel: DETAIL_MAX_SPEED,
+    jointRadiusPx: JOINT_RADIUS_PX,
+    jointColor: COLOR.joint,
+    colorForConnection: (a, b) => boneColor(a, b),
+    fadeOf: (p) => fadeOf(p),
+  });
+}
+
+function drawDetail(frame, px, target) {
+  const angles = jointAngles(frame.landmarks, { minVisibility: MIN_JOINT_VISIBILITY });
+  const targetAngles = target && target.mapped ? targetJointAngles(target.mapped) : {};
+  drawAngleArcs(ctx, angles, px, {
+    arcRadiusPx: DETAIL_ARC_PX,
+    fontPx: DETAIL_FONT_PX,
+    colorFor: (item) => {
+      const ok = angleWithin(item.angleDeg, targetAngles[item.joint], DETAIL_TOL_DEG);
+      return ok === null ? COLOR.joint : ok ? COLOR.guideOk : COLOR.ghostBad;
+    },
+  });
+  drawDepthIndicators(ctx, depthIndicators(frame.worldLandmarks), px, {
+    depthBasePx: DETAIL_DEPTH_BASE_PX,
+    depthGrowPx: DETAIL_DEPTH_GROW_PX,
+    depthColor: COLOR.ghost,
+  });
+  if (target && target.mapped && target.bad) {
+    const coincidence = coincidenceFromBad(target.mapped, target.bad);
+    drawMatchJoints(ctx, target.mapped, frame.landmarks, target.bad, px, {
+      matchJointPx: DETAIL_MATCH_PX,
+      minVisibility: MIN_JOINT_VISIBILITY,
+      okColor: COLOR.guideOk,
+      badColor: COLOR.ghostBad,
+      fadeOf: (p) => fadeOf(p),
+    });
+    drawMatchPercent(ctx, coincidence.percent, {
+      pctFontPx: DETAIL_PCT_PX,
+      pctPadPx: DETAIL_PCT_PAD_PX,
+      pctColor: COLOR.joint,
+    });
+  }
 }
 
 function boneRatio(index) {
@@ -713,7 +770,7 @@ function drawSilhouette(mapped, px, styleOfBone, styleOfJoint) {
 
 function drawGuide(frame, px) {
   const mapped = ghostMapped(T_GUIDE_PTS, frame.landmarks, frame.mirrored);
-  if (!mapped) return;
+  if (!mapped) return null;
   const covered = {};
   GUIDE_BONES.forEach(([aName, bName, orient]) => {
     covered[aName + "|" + bName] = segmentCovered(frame.landmarks, aName, bName, orient);
@@ -730,15 +787,17 @@ function drawGuide(frame, px) {
     return { color: bad ? COLOR.guideBad : COLOR.guideOk };
   };
   drawSilhouette(mapped, px, styleOfBone, styleOfJoint);
+  const bad = mapped.map((g, i) => !!g && styleOfJoint(i).color !== COLOR.guideOk);
+  return { mapped, bad };
 }
 
 function drawGhost(frame, box, px) {
   const id = ghostTarget(frame);
-  if (!id) return;
+  if (!id) return null;
   const pose = poseById(id);
-  if (!pose) return;
+  if (!pose) return null;
   const mapped = ghostMapped(pose.pts, frame.landmarks, frame.mirrored);
-  if (!mapped) return;
+  if (!mapped) return null;
   const h = Math.max(box.h, 1);
   const tol = GHOST_TOL_RATIO * h;
   const bad = new Array(mapped.length).fill(false);
@@ -755,6 +814,7 @@ function drawGhost(frame, box, px) {
   const styleOfBone = (i) => ({ color: bad[THUMB_BONES[i][0]] || bad[THUMB_BONES[i][1]] ? COLOR.ghostBad : COLOR.ghost });
   const styleOfJoint = (i) => ({ color: bad[i] ? COLOR.ghostBad : COLOR.ghost });
   drawSilhouette(mapped, px, styleOfBone, styleOfJoint);
+  return { mapped, bad };
 }
 
 function drawSkeleton(lm, box, px) {
@@ -1152,6 +1212,13 @@ ui.calibrate.addEventListener("click", async () => {
   startCalibration();
 });
 
+ui.detail.addEventListener("click", () => {
+  detailOn = !detailOn;
+  writeKey(DETAIL_KEY, detailOn ? DETAIL_ON : DETAIL_OFF);
+  renderDetailButton();
+  if (lastFrame) draw(lastFrame);
+});
+
 ui.reset.addEventListener("click", () => {
   engine.reset();
   lastRep = null;
@@ -1464,6 +1531,7 @@ if (window.ResizeObserver) new ResizeObserver(resizeCanvas).observe(stage);
 $("bar-version").textContent = "v" + APP_VERSION;
 $("info-version").textContent = "v" + APP_VERSION;
 syncEngine();
+renderDetailButton();
 renderCapture(null);
 resizeCanvas();
 showMessage(TEXT.idle, TEXT.idleHint);

@@ -120,6 +120,24 @@ button { font: inherit; color: inherit; }
 .zoom-btn svg { width: 18px; height: 18px; display: block; }
 .zoom-btn[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
 
+.detail-btn {
+  position: absolute;
+  z-index: 5;
+  top: 12px;
+  right: 12px;
+  width: 36px;
+  height: 36px;
+  padding: 6px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: rgba(23, 26, 33, 0.82);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.detail-btn svg { width: 100%; height: 100%; display: block; }
+.detail-btn[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+
 .stage-msg {
   position: absolute;
   z-index: 3;

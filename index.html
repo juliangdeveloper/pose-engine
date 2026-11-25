@@ -16,8 +16,8 @@
   <title>Pose Engine</title>
   <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="assets/icon-180.png">
-  <link rel="manifest" href="manifest.json?v=0.6.1">
-  <link rel="stylesheet" href="css/styles.css?v=0.6.1">
+  <link rel="manifest" href="manifest.json?v=0.7.0">
+  <link rel="stylesheet" href="css/styles.css?v=0.7.0">
 </head>
 <body>
   <header class="bar">
@@ -48,6 +48,14 @@
         <div class="stage-track" aria-hidden="true"><span class="stage-track-fill" id="stage-track-fill"></span></div>
       </div>
       <p class="stage-alert" id="stage-alert" hidden aria-live="polite"></p>
+      <button class="detail-btn" type="button" id="btn-detail" aria-label="Detalle" aria-pressed="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M4 7h9M17 7h3M4 12h3M11 12h9M4 17h11M19 17h1"/>
+          <circle cx="15" cy="7" r="2" fill="none" stroke="currentColor" stroke-width="1.8"/>
+          <circle cx="9" cy="12" r="2" fill="none" stroke="currentColor" stroke-width="1.8"/>
+          <circle cx="17" cy="17" r="2" fill="none" stroke="currentColor" stroke-width="1.8"/>
+        </svg>
+      </button>
       <button class="zoom-btn" type="button" id="btn-zoom" hidden aria-label="Ampliar encuadre" aria-pressed="false">
         <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
           <circle cx="10" cy="10" r="6.2" fill="none" stroke="currentColor" stroke-width="1.8"/>
@@ -160,6 +168,6 @@
     </div>
   </dialog>
 
-  <script type="module" src="js/app.js?v=0.6.1"></script>
+  <script type="module" src="js/app.js?v=0.7.0"></script>
 </body>
 </html>

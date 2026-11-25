@@ -1,5 +1,5 @@
 export const DEFAULTS_SEED_KEY = "pose-engine.defaults";
-export const DEFAULTS_SEED = 4;
+export const DEFAULTS_SEED = 5;
 
 const VIS = 0.95;
 const CREATED = "2026-01-01T00:00:00.000Z";
@@ -163,14 +163,12 @@ export const DEFAULT_MOVEMENTS = Object.freeze([
     name: "Jab",
     description: "",
     sequence: Object.freeze(["p-guardia", "p-jab"]),
-    onset: Object.freeze({ side: "any", elbowDeg: 120, elbowAngVel: 120, twistMax: 22 }),
   }),
   Object.freeze({
     id: "m-cross",
     name: "Cross",
     description: "",
     sequence: Object.freeze(["p-guardia", "p-cross"]),
-    onset: Object.freeze({ side: "any", elbowDeg: 120, elbowAngVel: 120, twistMin: 18 }),
   }),
   Object.freeze({
     id: "m-esquive",

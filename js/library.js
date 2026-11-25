@@ -1,4 +1,4 @@
-import { SEGMENT_NAMES, PREVIEW_JOINTS, FEATURES_VERSION, normalizeSequence, upgradeFeatures } from "../engine/v2/index.js?v=0.6.1";
+import { SEGMENT_NAMES, PREVIEW_JOINTS, FEATURES_VERSION, normalizeSequence, upgradeFeatures } from "../engine/v2/index.js?v=0.7.0";
 import { LIBRARY_KEY, EXPORT_FORMAT, APP_ID, NAME_MAX, DESCRIPTION_MAX, SEEDED_KEY } from "./config.js";
 import { DEFAULTS_SEED_KEY, DEFAULTS_SEED, DEFAULT_POSES, DEFAULT_MOVEMENTS } from "./defaults.js";
 
@@ -17,16 +17,6 @@ function text(v, max) {
 
 function finiteList(v, len) {
   return Array.isArray(v) && v.length === len && v.every((n) => typeof n === "number" && isFinite(n));
-}
-
-function cleanOnset(raw) {
-  if (!raw || typeof raw !== "object") return null;
-  const out = {};
-  if (raw.side === "left" || raw.side === "right" || raw.side === "any") out.side = raw.side;
-  ["elbowDeg", "hysteresisDeg", "elbowAngVel", "restAngVel", "restMs", "twistMin", "twistMax"].forEach((k) => {
-    if (typeof raw[k] === "number" && isFinite(raw[k])) out[k] = raw[k];
-  });
-  return Object.keys(out).length ? out : null;
 }
 
 function cleanPose(raw) {
@@ -57,15 +47,12 @@ function cleanPose(raw) {
 function cleanMove(m, known) {
   if (!m || typeof m !== "object") return null;
   const name = text(m.name, NAME_MAX);
-  const out = {
+  return {
     id: typeof m.id === "string" && m.id ? m.id : newId("m-"),
     name: name || "Movimiento",
     description: text(m.description, DESCRIPTION_MAX),
     sequence: (Array.isArray(m.sequence) ? m.sequence : []).filter((id) => typeof id === "string" && known.has(id)),
   };
-  const onset = cleanOnset(m.onset);
-  if (onset) out.onset = onset;
-  return out;
 }
 
 function clean(data) {
@@ -134,8 +121,7 @@ function applyDefaults(lib) {
     const cleaned = d ? cleanMove(d, known) : null;
     if (!cleaned) return m;
     const next = Object.assign({}, m);
-    if (cleaned.onset) next.onset = cleaned.onset;
-    else delete next.onset;
+    delete next.onset;
     return next;
   });
   DEFAULT_MOVEMENTS.forEach((m) => {

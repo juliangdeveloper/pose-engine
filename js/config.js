@@ -1,10 +1,13 @@
 export const APP_ID = "pose-engine";
-export const APP_VERSION = "0.6.1";
+export const APP_VERSION = "0.7.0";
 export const STATS_KEY = "pose-engine.stats";
 export const CAMERA_KEY = "pose-engine.camera";
 export const LENS_KEY = "pose-engine.lens";
 export const LIBRARY_KEY = "pose-engine.library";
 export const CALIBRATION_KEY = "pose-engine.calibration";
+export const DETAIL_KEY = "pose-engine.detail";
+export const DETAIL_ON = "1";
+export const DETAIL_OFF = "0";
 export const SEEDED_KEY = "pose-engine.seeded";
 export const CALIBRATION_MAX = 6;
 export const EXPORT_FORMAT = 1;
@@ -52,6 +55,16 @@ export const FRAME_MIN_HEIGHT = 0.45;
 export const FRAME_MAX_HEIGHT = 0.88;
 export const FRAME_PAD = 0.02;
 export const LUM_SIZE = 16;
+export const DETAIL_ARC_PX = 16;
+export const DETAIL_FONT_PX = 11;
+export const DETAIL_MAX_BONE_PX = 10;
+export const DETAIL_MAX_SPEED = 360;
+export const DETAIL_TOL_DEG = 30;
+export const DETAIL_DEPTH_BASE_PX = 4;
+export const DETAIL_DEPTH_GROW_PX = 10;
+export const DETAIL_MATCH_PX = 6;
+export const DETAIL_PCT_PX = 13;
+export const DETAIL_PCT_PAD_PX = 12;
 export const LUM_DARK = 34;
 export const LUM_CENTER_MAX = 72;
 export const LUM_CONTRAST = 42;
@@ -108,6 +121,7 @@ export const TEXT = Object.freeze({
   releaseFirst: "Baja los brazos y haz la pose T para capturar",
   calibrate: "Calibrar",
   calibrateSkip: "Omitir",
+  detail: "Detalle",
   calWait: "Haz la pose T",
   calWaitHint: "",
   calHold: "Quieto…",

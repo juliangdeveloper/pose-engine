@@ -9,10 +9,10 @@ import { createCalibrationFlow, computeCalibration, validCalibration, missingPar
 import { createMediaPipeDetector, DELEGATE, MODEL, TASKS_VISION_VERSION } from "./detector.js";
 import { createDepthEstimator, DEPTH_DEFAULTS } from "./depth.js";
 import { createMotionTracker } from "./motion.js";
-import { createOnsetDetector, ONSET_DEFAULTS, ONSET_SIDE } from "./onset.js";
 import { openCamera, closeCamera, retuneLens, readCameraState, emptyCameraState, FACING, LENS, CAMERA_ERROR, CameraError, CAMERA_RELEASE_MS } from "./camera.js";
+import { OVERLAY_DEFAULTS, DETAIL_JOINTS, angleAt, jointAngles, targetJointAngles, angleWithin, drawAngleArcs, segmentForConnection, segmentSpeeds, speedStyle, velocityStyles, drawVelocitySkeleton, depthIndicators, drawDepthIndicators, coincidenceFromMapped, coincidenceFromBad, drawMatchJoints, drawMatchPercent, buildDetail } from "./overlay.js";
 
-export const ENGINE_VERSION = "0.6.1";
+export const ENGINE_VERSION = "0.7.0";
 export const SOURCE = Object.freeze({ CAMERA: "camera", VIDEO: "video" });
 export const STATUS = Object.freeze({ LOADING_MODEL: "loading-model", OPENING_CAMERA: "opening-camera", RUNNING: "running", STOPPED: "stopped" });
 export const ENGINE_ERROR = Object.freeze(Object.assign({ MODEL_FAILED: "model-failed", DETECT_FAILED: "detect-failed", NO_VIDEO: "no-video" }, CAMERA_ERROR));
@@ -21,13 +21,14 @@ export const POSE_EVENT = Object.freeze({ ENTER: "enter", LEAVE: "leave" });
 const FPS_SMOOTHING = 0.1;
 const MS_PER_S = 1000;
 
-export { LANDMARK, LANDMARK_COUNT, CONNECTIONS, SMOOTHING_DEFAULTS, HOLD_DEFAULTS, DEPTH_DEFAULTS, ONSET_DEFAULTS, ONSET_SIDE, DELEGATE, MODEL, TASKS_VISION_VERSION, FACING, LENS };
+export { LANDMARK, LANDMARK_COUNT, CONNECTIONS, SMOOTHING_DEFAULTS, HOLD_DEFAULTS, DEPTH_DEFAULTS, DELEGATE, MODEL, TASKS_VISION_VERSION, FACING, LENS };
 export { SEGMENT, SEGMENT_NAMES, MATCH_TOLERANCE, MATCH_DEFAULTS, TPOSE_MAX_DEG, PREVIEW_JOINTS, FEATURES_VERSION, MIN_SEQUENCE };
 export { GRADE, GRADE_LABEL, GRADE_EXCELENTE_MIN, GRADE_BIEN_MIN, CAPTURE_STATE, CAPTURE_RESULT, CAPTURE_DEFAULTS };
 export { CALIBRATION_STATE, CALIBRATION_RESULT, CALIBRATION_DEFAULTS, CALIBRATION_VERSION, BODY_PART };
 export { poseFeatures, averageFeatures, compareFeatures, upgradeFeatures, isTPose, bodyFrame, gradeFor, normalizeSequence };
 export { createCalibrationFlow, computeCalibration, validCalibration, missingParts };
-export { createPoseMatcher, createMovementTracker, createCaptureFlow, createMediaPipeDetector, createOneEuroFilter, createLandmarkSmoother, createVisibilityHold, createDepthEstimator, createMotionTracker, createOnsetDetector };
+export { createPoseMatcher, createMovementTracker, createCaptureFlow, createMediaPipeDetector, createOneEuroFilter, createLandmarkSmoother, createVisibilityHold, createDepthEstimator, createMotionTracker };
+export { OVERLAY_DEFAULTS, DETAIL_JOINTS, angleAt, jointAngles, targetJointAngles, angleWithin, drawAngleArcs, segmentForConnection, segmentSpeeds, speedStyle, velocityStyles, drawVelocitySkeleton, depthIndicators, drawDepthIndicators, coincidenceFromMapped, coincidenceFromBad, drawMatchJoints, drawMatchPercent, buildDetail };
 
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -50,7 +51,6 @@ export function createPoseEngine(options) {
   const worldHold = createVisibilityHold(o.hold);
   const depth = createDepthEstimator(o.depth);
   const motionTracker = createMotionTracker();
-  const onset = createOnsetDetector(o.onset);
   const matcher = createPoseMatcher(o.match);
   const tracker = createMovementTracker();
   const capture = createCaptureFlow(o.capture);
@@ -75,7 +75,6 @@ export function createPoseEngine(options) {
   let lastVideoTime = -1;
   let lastFrame = null;
   let lastCaptureKey = "";
-  const onsetLatency = {};
 
   function cameraOptions(extra) {
     const opts = { facingMode: facing, lens };
@@ -131,7 +130,6 @@ export function createPoseEngine(options) {
   function setMovements(list) {
     movements = (Array.isArray(list) ? list : []).filter((m) => m && typeof m.id === "string");
     tracker.setMovements(movements, poses.map((p) => p.id));
-    onset.setMovements(movements);
     return movements.length;
   }
 
@@ -170,10 +168,6 @@ export function createPoseEngine(options) {
     const features = landmarks ? poseFeatures(landmarks, world, { mirrored, calibration }) : null;
     const body = world ? bodyFrame(world, calibration && calibration.chirality) : null;
     const motion = motionTracker.update(world, body, t);
-    onset.update(features, motion, t).forEach((ev) => {
-      onsetLatency[ev.movement] = ev.latencyMs;
-      emit("onset", ev);
-    });
     const cal = calibrator.update(features, landmarks, world, t);
     if (cal.result) calibration = cal.result.calibration;
     const calKey = calibrationKey(cal.snapshot);
@@ -191,7 +185,7 @@ export function createPoseEngine(options) {
     if (match.left) emit("pose", Object.assign({ type: POSE_EVENT.LEAVE }, match.left));
     if (match.entered) {
       emit("pose", Object.assign({ type: POSE_EVENT.ENTER }, match.entered));
-      if (!capture.active() && !calibrator.active()) tracker.enter(match.entered.id, match.entered.proximity, t).reps.forEach((r) => emit("rep", onsetLatency[r.movement] === undefined ? r : Object.assign({ latencyMs: onsetLatency[r.movement] }, r)));
+      if (!capture.active() && !calibrator.active()) tracker.enter(match.entered.id, match.entered.proximity, t).reps.forEach((r) => emit("rep", r));
     }
     if (match.active) tracker.track(match.active.id, match.active.proximity);
     lastFrame = {
@@ -261,8 +255,6 @@ export function createPoseEngine(options) {
     worldHold.reset();
     depth.reset();
     motionTracker.reset();
-    onset.reset();
-    Object.keys(onsetLatency).forEach((k) => delete onsetLatency[k]);
     matcher.reset();
     lastT = null;
     fps = 0;
