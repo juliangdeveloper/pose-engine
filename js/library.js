@@ -1,4 +1,4 @@
-import { SEGMENT_NAMES, PREVIEW_JOINTS, FEATURES_VERSION, normalizeSequence, upgradeFeatures } from "../engine/v2/index.js?v=0.9.0";
+import { SEGMENT_NAMES, PREVIEW_JOINTS, HAND_PREVIEW_COUNT, FEATURES_VERSION, normalizeSequence, upgradeFeatures } from "../engine/v2/index.js?v=0.10.0";
 import { LIBRARY_KEY, EXPORT_FORMAT, APP_ID, NAME_MAX, DESCRIPTION_MAX, SEEDED_KEY } from "./config.js";
 import { DEFAULTS_SEED_KEY, DEFAULTS_SEED, DEFAULT_POSES, DEFAULT_MOVEMENTS } from "./defaults.js";
 
@@ -30,7 +30,9 @@ function cleanPose(raw) {
     const v = p.vis && p.vis[name];
     vis[name] = typeof v === "number" && isFinite(v) ? Math.min(1, Math.max(0, v)) : 1;
   });
-  const pts = Array.isArray(p.pts) && p.pts.length === PREVIEW_JOINTS.length ? p.pts.map((q) => (finiteList(q, POINT_LEN) ? q.slice() : null)) : [];
+  const isHand = p.kind === "hand";
+  const ptsLen = isHand ? HAND_PREVIEW_COUNT : PREVIEW_JOINTS.length;
+  const pts = Array.isArray(p.pts) && p.pts.length === ptsLen ? p.pts.map((q) => (finiteList(q, POINT_LEN) ? q.slice() : null)) : [];
   const name = text(p.name, NAME_MAX);
   const out = {
     id: typeof p.id === "string" && p.id ? p.id : newId("p-"),
@@ -40,6 +42,7 @@ function cleanPose(raw) {
     v: FEATURES_VERSION,
     seg, vis, pts,
   };
+  if (isHand) out.kind = "hand";
   if (p.alt === true) out.alt = true;
   return out;
 }

@@ -153,16 +153,21 @@ export function mountCapture(host, options) {
       return;
     }
     countdown.textContent = "";
+    const isHand = c.kind === "hand";
+    const waitTitle = isHand ? (texts.waitHand || texts.waitT) : texts.waitT;
+    const waitHint = isHand ? (texts.waitHandHint || texts.waitTHint) : texts.waitTHint;
+    const nextTitle = isHand ? (texts.waitHandNext || texts.waitTNext) : texts.waitTNext;
     if (c.state === "holding") {
       bannerTitle.textContent = texts.holdT;
       bannerHint.textContent = texts.waitTHint;
     } else if (note) {
       bannerTitle.textContent = note.text;
-      bannerHint.textContent = c.needsRelease ? texts.releaseT : texts.waitTNext;
+      bannerHint.textContent = c.needsRelease ? (isHand ? nextTitle : texts.releaseT) : nextTitle;
       banner.dataset.state = note.ok ? "done" : "failed";
     } else {
-      bannerTitle.textContent = c.needsRelease ? (s.capturedNote ? texts.releaseT : texts.releaseFirst) : texts.waitT;
-      bannerHint.textContent = texts.waitTHint;
+      bannerTitle.textContent = isHand ? waitTitle : (c.needsRelease ? (s.capturedNote ? texts.releaseT : texts.releaseFirst) : texts.waitT);
+      bannerHint.textContent = isHand && !c.needsRelease ? waitHint : texts.waitTHint;
+      if (isHand && c.needsRelease) bannerHint.textContent = waitHint;
     }
   }
 

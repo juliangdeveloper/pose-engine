@@ -1,10 +1,10 @@
-import { createPoseEngine, SOURCE, STATUS, FACING, LENS, CAPTURE_STATE, CAPTURE_RESULT, CALIBRATION_RESULT, PREVIEW_JOINTS, POSE_EVENT, GESTURES, GESTURE_EVENT, gradeFor, normalizeSequence, validCalibration } from "../engine/v2/index.js?v=0.9.0";
-import { createPoseOverlay } from "../engine/v2/overlay-ui.js?v=0.9.0";
-import { mountCapture } from "../engine/v2/capture-ui.js?v=0.9.0";
-import { mountLibrary } from "../engine/v2/library-ui.js?v=0.9.0";
-import { mountGestures } from "../engine/v2/gesture-ui.js?v=0.9.0";
+import { createPoseEngine, SOURCE, STATUS, FACING, LENS, CAPTURE_STATE, CAPTURE_RESULT, CALIBRATION_RESULT, PREVIEW_JOINTS, HAND_PREVIEW_COUNT, HAND_BONES, POSE_EVENT, gradeFor, normalizeSequence, validCalibration } from "../engine/v2/index.js?v=0.10.0";
+import { createPoseOverlay } from "../engine/v2/overlay-ui.js?v=0.10.0";
+import { mountCapture } from "../engine/v2/capture-ui.js?v=0.10.0";
+import { mountLibrary } from "../engine/v2/library-ui.js?v=0.10.0";
+import { mountHands } from "../engine/v2/hands-ui.js?v=0.10.0";
 import {
-  APP_ID, APP_VERSION, CAMERA_KEY, LENS_KEY, CALIBRATION_KEY, DETAIL_KEY, DETAIL_ON, DETAIL_OFF, GESTURES_KEY, CALIBRATION_MAX, STATS_KEY, STAT, STATS, MAX_DPR, PERCENT, COLOR, TEXT,
+  APP_ID, APP_VERSION, CAMERA_KEY, LENS_KEY, CALIBRATION_KEY, DETAIL_KEY, DETAIL_ON, DETAIL_OFF, CALIBRATION_MAX, STATS_KEY, STAT, STATS, MAX_DPR, PERCENT, COLOR, TEXT,
   NAME_MAX, DESCRIPTION_MAX,
 } from "./config.js";
 import { loadLibrary, saveLibrary, exportLibrary, parseImport, mergeLibrary, newId, nextName, playable, resetLibrary } from "./library.js";
@@ -59,7 +59,6 @@ function writeKey(key, value) {
 
 let library = loadLibrary();
 let detailOn = readKey(DETAIL_KEY, [DETAIL_ON, DETAIL_OFF], DETAIL_OFF) === DETAIL_ON;
-let gesturesOn = readKey(GESTURES_KEY, [DETAIL_ON, DETAIL_OFF], DETAIL_OFF) === DETAIL_ON;
 const engine = createPoseEngine({
   video,
   facingMode: readKey(CAMERA_KEY, [FACING.USER, FACING.ENVIRONMENT], FACING.USER),
@@ -128,22 +127,10 @@ function renderCaptureUI(snapshot) {
   });
 }
 
-const gestureUI = mountGestures(stage, {
-  onToggle: () => {
-    gesturesOn = !gesturesOn;
-    writeKey(GESTURES_KEY, gesturesOn ? DETAIL_ON : DETAIL_OFF);
-    renderGestures();
-  },
-});
+const handsUI = mountHands(stage, {});
 
-function renderGestures() {
-  engine.setGestures(gesturesOn ? GESTURES : []);
-  renderGestureState(engine.getState().gestureState);
-}
-
-function renderGestureState(state) {
-  const shown = running || state === "loading" || state === "failed" ? state : "idle";
-  gestureUI.render({ state: shown, id: null }, gesturesOn);
+function renderHands(snapshot) {
+  handsUI.render(snapshot || { state: "off" });
 }
 
 const libraryUI = mountLibrary(document.body, {
@@ -448,6 +435,28 @@ function drawThumb(el, pts, size) {
   c.lineCap = "round";
   c.lineWidth = 3 * scale;
   c.strokeStyle = COLOR.thumb;
+  if (pts.length === HAND_PREVIEW_COUNT) {
+    HAND_BONES.forEach(([a, b]) => {
+      const pa = pts[a];
+      const pb = pts[b];
+      if (!pa || !pb) return;
+      const A = at(pa);
+      const B = at(pb);
+      c.beginPath();
+      c.moveTo(A.x, A.y);
+      c.lineTo(B.x, B.y);
+      c.stroke();
+    });
+    c.fillStyle = COLOR.thumbJoint;
+    pts.forEach((q) => {
+      if (!q) return;
+      const P = at(q);
+      c.beginPath();
+      c.arc(P.x, P.y, Math.max(1.4 * scale, 2), 0, Math.PI * 2);
+      c.fill();
+    });
+    return;
+  }
   THUMB_BONES.forEach(([a, b]) => {
     const pa = pts[a];
     const pb = pts[b];
@@ -552,7 +561,7 @@ function modelEase(v) {
 }
 
 function sidePtsAt(move, now) {
-  const poses = move.sequence.map(poseById).filter((p) => p && p.pts && p.pts.length);
+  const poses = move.sequence.map(poseById).filter((p) => p && p.pts && p.pts.length === PREVIEW_JOINTS.length);
   if (!poses.length) return null;
   const step = SIDE_HOLD_MS + SIDE_TWEEN_MS;
   const phase = (now % (step * poses.length)) / step;
@@ -669,11 +678,16 @@ function stopAll() {
   overlay.clear();
   showMessage(TEXT.idle, TEXT.idleHint);
   renderHud(null);
-  renderGestures();
+  renderHands({ state: "off" });
 }
 
-function addCapturedPose(features) {
+function addCapturedPose(features, kind) {
+  const isHand = kind === "hand";
   const pose = Object.assign({ id: newId("p-"), name: nextName(library.poses, TEXT.posePrefix), description: "", createdAt: new Date().toISOString() }, features);
+  if (isHand) {
+    pose.kind = "hand";
+    pose.alt = true;
+  }
   library.poses.push(pose);
   commit();
   stats[STAT.CAPTURES_TOTAL] += 1;
@@ -689,14 +703,14 @@ engine.on("status", (s) => {
 engine.on("frame", (frame) => {
   lastFrame = frame;
   overlay.draw(frame);
-  gestureUI.render(frame.gesture, gesturesOn);
+  renderHands(frame.hands);
   renderHud(frame);
   renderCaptureUI(frame.capture);
 });
 
 engine.on("capture", (c) => {
   if (c.result === CAPTURE_RESULT.CAPTURED) {
-    const pose = addCapturedPose(c.features);
+    const pose = addCapturedPose(c.features, c.kind);
     capturedNote = { at: performance.now(), ok: true, text: pose.name + " " + TEXT.captured };
   } else if (c.result === CAPTURE_RESULT.NO_BODY) {
     capturedNote = { at: performance.now(), ok: false, text: TEXT.captureFailed };
@@ -719,12 +733,8 @@ engine.on("pose", (p) => {
   if (p.type === POSE_EVENT.ENTER) restart(ui.poseName, "flash");
 });
 
-engine.on("gesture-state", (s) => {
-  if (!running) renderGestureState(s.state);
-});
-
-engine.on("gesture", (g) => {
-  if (g.type === GESTURE_EVENT.ENTER) restart(gestureUI.element, "bump");
+engine.on("hands-state", (s) => {
+  if (!running || !lastFrame) renderHands(s);
 });
 
 engine.on("rep", (r) => {
@@ -750,6 +760,21 @@ ui.camera.addEventListener("click", () => {
   if (running && source === SOURCE.CAMERA) stopAll();
   else startCamera();
 });
+
+async function touchHandCapture() {
+  if (!running && !(await startCamera())) return;
+  if (engine.calibrating()) engine.cancelCalibration();
+  if (!engine.capturing()) {
+    engine.startHandCapture();
+    renderCaptureUI({ state: CAPTURE_STATE.WAITING, kind: "hand", needsRelease: false, holdProgress: 0, seconds: 0 });
+  }
+  engine.touch();
+}
+
+stage.addEventListener("pointerdown", (e) => {
+  if (e.target && e.target.closest && e.target.closest("button")) return;
+  void touchHandCapture();
+}, false);
 
 ui.capture.addEventListener("click", async () => {
   if (pendingCapture) {
@@ -861,7 +886,7 @@ $("bar-version").textContent = "v" + APP_VERSION;
 $("info-version").textContent = "v" + APP_VERSION;
 syncEngine();
 renderDetailButton();
-renderGestures();
+renderHands({ state: "off" });
 renderCaptureUI(null);
 resizeCanvas();
 showMessage(TEXT.idle, TEXT.idleHint);

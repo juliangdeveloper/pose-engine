@@ -1,5 +1,5 @@
 export const APP_ID = "pose-engine";
-export const APP_VERSION = "0.9.0";
+export const APP_VERSION = "0.10.0";
 export const STATS_KEY = "pose-engine.stats";
 export const CAMERA_KEY = "pose-engine.camera";
 export const LENS_KEY = "pose-engine.lens";
@@ -8,7 +8,6 @@ export const CALIBRATION_KEY = "pose-engine.calibration";
 export const DETAIL_KEY = "pose-engine.detail";
 export const DETAIL_ON = "1";
 export const DETAIL_OFF = "0";
-export const GESTURES_KEY = "pose-engine.gestures";
 export const SEEDED_KEY = "pose-engine.seeded";
 export const CALIBRATION_MAX = 6;
 export const EXPORT_FORMAT = 1;
@@ -117,6 +116,9 @@ export const TEXT = Object.freeze({
   firstMove: "Arma un movimiento en Movimientos.",
   waitT: "Haz la pose T para capturar",
   waitTHint: "Brazos rectos a los lados, a la altura de los hombros",
+  waitHand: "Toca la pantalla para capturar",
+  waitHandHint: "Muestra la mano que quieres guardar",
+  waitHandNext: "Toca la pantalla para capturar otra",
   waitTNext: "Haz la pose T para capturar otra",
   releaseT: "Baja los brazos para capturar otra",
   releaseFirst: "Baja los brazos y haz la pose T para capturar",

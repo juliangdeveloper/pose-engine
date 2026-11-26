@@ -138,52 +138,29 @@ button { font: inherit; color: inherit; }
 .detail-btn svg { width: 100%; height: 100%; display: block; }
 .detail-btn[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
 
-.pe-gesture {
+.pe-hands {
   position: absolute;
   z-index: 5;
   top: 12px;
   right: 56px;
   display: flex;
   align-items: center;
-  gap: 6px;
-  max-width: calc(100% - 112px);
-}
-.pe-gesture-icon {
-  flex: none;
   width: 36px;
   height: 36px;
-  padding: 6px;
   border-radius: 50%;
   border: 1px solid var(--line);
   background: rgba(23, 26, 33, 0.82);
-  color: var(--text);
-  cursor: pointer;
 }
-span.pe-gesture-icon { cursor: default; }
-.pe-gesture-icon svg { width: 100%; height: 100%; display: block; }
-.pe-gesture-slash { display: none; }
-.pe-gesture-icon[aria-pressed="true"] { border-color: var(--accent); }
-.pe-gesture[data-state="near"] .pe-gesture-icon { border-color: var(--accent); color: var(--accent); }
-.pe-gesture[data-state="far"] .pe-gesture-icon,
-.pe-gesture[data-state="failed"] .pe-gesture-icon { color: var(--muted); }
-.pe-gesture[data-state="far"] .pe-gesture-slash,
-.pe-gesture[data-state="failed"] .pe-gesture-slash { display: inline; }
-.pe-gesture[data-state="loading"] .pe-gesture-icon { animation: pe-gesture-pulse 1s ease-in-out infinite alternate; }
-.pe-gesture-label {
-  min-width: 0;
-  padding: 6px 12px;
-  border-radius: 999px;
-  border: 1px solid var(--accent);
-  background: rgba(23, 26, 33, 0.9);
-  color: var(--accent);
-  font-size: 14px;
-  font-weight: 700;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.pe-hands-led {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  margin: 0 auto;
+  border-radius: 50%;
+  background: #6b7280;
 }
-.pe-gesture.bump .pe-gesture-label { animation: bump 0.35s ease-out; }
-@keyframes pe-gesture-pulse { from { opacity: 1; } to { opacity: 0.45; } }
+.pe-hands[data-state="on"] .pe-hands-led { background: var(--accent); }
+.pe-hands[data-state="on"] { border-color: var(--accent); }
 
 .stage-msg {
   position: absolute;

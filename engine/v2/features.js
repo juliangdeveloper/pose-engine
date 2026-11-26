@@ -13,8 +13,36 @@ export const SEGMENT = Object.freeze({
   SHOULDER_LINE: "shoulderLine",
   HIP_LINE: "hipLine",
   GRAVITY: "gravity",
+  PALM_INDEX: "palmIndex",
+  PALM_MIDDLE: "palmMiddle",
+  PALM_RING: "palmRing",
+  PALM_PINKY: "palmPinky",
+  THUMB_PROXIMAL: "thumbProximal",
+  THUMB_MIDDLE: "thumbMiddle",
+  THUMB_DISTAL: "thumbDistal",
+  INDEX_PROXIMAL: "indexProximal",
+  INDEX_MIDDLE: "indexMiddle",
+  INDEX_DISTAL: "indexDistal",
+  MIDDLE_PROXIMAL: "middleProximal",
+  MIDDLE_MIDDLE: "middleMiddle",
+  MIDDLE_DISTAL: "middleDistal",
+  RING_PROXIMAL: "ringProximal",
+  RING_MIDDLE: "ringMiddle",
+  RING_DISTAL: "ringDistal",
+  PINKY_PROXIMAL: "pinkyProximal",
+  PINKY_MIDDLE: "pinkyMiddle",
+  PINKY_DISTAL: "pinkyDistal",
 });
 export const SEGMENT_NAMES = Object.freeze(Object.values(SEGMENT));
+export const HAND_PREVIEW_COUNT = 21;
+export const HAND_BONES = Object.freeze([
+  [0, 1], [1, 2], [2, 3], [3, 4],
+  [0, 5], [5, 6], [6, 7], [7, 8],
+  [5, 9], [9, 10], [10, 11], [11, 12],
+  [9, 13], [13, 14], [14, 15], [15, 16],
+  [13, 17], [17, 18], [18, 19], [19, 20],
+  [0, 9], [9, 13], [13, 17],
+]);
 export const MATCH_TOLERANCE = Object.freeze({ rmsDeg: 60, minShared: 3, minSharedRatio: 0.5, minVisibility: 0.5 });
 export const TPOSE_MAX_DEG = 28;
 export const PREVIEW_JOINTS = Object.freeze([
@@ -37,6 +65,31 @@ const LINES = Object.freeze([
   [SEGMENT.SHOULDER_LINE, "left_shoulder", "right_shoulder"],
   [SEGMENT.HIP_LINE, "left_hip", "right_hip"],
 ]);
+const HAND_SEGMENTS = Object.freeze([
+  [SEGMENT.PALM_INDEX, 0, 5],
+  [SEGMENT.PALM_MIDDLE, 0, 9],
+  [SEGMENT.PALM_RING, 0, 13],
+  [SEGMENT.PALM_PINKY, 0, 17],
+  [SEGMENT.THUMB_PROXIMAL, 1, 2],
+  [SEGMENT.THUMB_MIDDLE, 2, 3],
+  [SEGMENT.THUMB_DISTAL, 3, 4],
+  [SEGMENT.INDEX_PROXIMAL, 5, 6],
+  [SEGMENT.INDEX_MIDDLE, 6, 7],
+  [SEGMENT.INDEX_DISTAL, 7, 8],
+  [SEGMENT.MIDDLE_PROXIMAL, 9, 10],
+  [SEGMENT.MIDDLE_MIDDLE, 10, 11],
+  [SEGMENT.MIDDLE_DISTAL, 11, 12],
+  [SEGMENT.RING_PROXIMAL, 13, 14],
+  [SEGMENT.RING_MIDDLE, 14, 15],
+  [SEGMENT.RING_DISTAL, 15, 16],
+  [SEGMENT.PINKY_PROXIMAL, 17, 18],
+  [SEGMENT.PINKY_MIDDLE, 18, 19],
+  [SEGMENT.PINKY_DISTAL, 19, 20],
+]);
+const HAND_WRIST = 0;
+const HAND_INDEX_MCP = 5;
+const HAND_MIDDLE_MCP = 9;
+const HAND_PINKY_MCP = 17;
 export const LIMB_SEGMENTS = Object.freeze(LIMBS.map(([name, a, b]) => Object.freeze([name, LANDMARK[a], LANDMARK[b]])));
 export const DEPTH_GAIN_MAX = 2.5;
 const GRAVITY_DOWN = Object.freeze({ x: 0, y: 1, z: 0 });
@@ -211,6 +264,63 @@ export function poseFeatures(landmarks, world, options) {
   seg[SEGMENT.GRAVITY] = local(frame, (cal && vec(cal.down)) || GRAVITY_DOWN);
   visOut[SEGMENT.GRAVITY] = Math.min.apply(null, TORSO.map((n) => vis(landmarks[LANDMARK[n]])));
   return { v: FEATURES_VERSION, seg, vis: visOut, pts: preview(landmarks, !!(options && options.mirrored)) };
+}
+
+function handPreview(landmarks, mirrored) {
+  const pts = landmarks.map((q) => {
+    if (!finite(q)) return null;
+    return { x: mirrored ? 1 - q.x : q.x, y: q.y, v: vis(q) };
+  });
+  const seen = pts.filter(Boolean);
+  if (!seen.length) return [];
+  const xs = seen.map((q) => q.x);
+  const ys = seen.map((q) => q.y);
+  const xMin = Math.min.apply(null, xs), xMax = Math.max.apply(null, xs);
+  const yMin = Math.min.apply(null, ys), yMax = Math.max.apply(null, ys);
+  const box = (Math.max(xMax - xMin, yMax - yMin) || 1) * (1 + 2 * PREVIEW_PAD);
+  const cx = (xMin + xMax) / 2;
+  const cy = (yMin + yMax) / 2;
+  return pts.map((q) => (q ? [round((q.x - cx) / box + 0.5), round((q.y - cy) / box + 0.5), round(q.v)] : null));
+}
+
+function handFrame(points) {
+  const wrist = points[HAND_WRIST];
+  const middle = points[HAND_MIDDLE_MCP];
+  const index = points[HAND_INDEX_MCP];
+  const pinky = points[HAND_PINKY_MCP];
+  if (!finite(wrist) || !finite(middle) || !finite(index) || !finite(pinky)) return null;
+  const up = unit(sub(middle, wrist));
+  if (!up) return null;
+  let right = unit(sub(index, pinky));
+  if (!right) return null;
+  right = unit(sub(right, scale(up, dot(right, up))));
+  if (!right) return null;
+  return { up, right, forward: cross(up, right) };
+}
+
+export function handFeatures(landmarks, world, options) {
+  if (!landmarks || landmarks.length < HAND_PREVIEW_COUNT) return null;
+  const pts = world && world.length >= HAND_PREVIEW_COUNT ? world : landmarks;
+  const frame = handFrame(pts);
+  if (!frame) return null;
+  const seg = {};
+  const visOut = {};
+  HAND_SEGMENTS.forEach(([name, a, b]) => {
+    const pa = pts[a];
+    const pb = pts[b];
+    if (!finite(pa) || !finite(pb)) return;
+    const d = unit(sub(pb, pa));
+    if (!d) return;
+    seg[name] = local(frame, d);
+    visOut[name] = 1;
+  });
+  if (!Object.keys(seg).length) return null;
+  return { v: FEATURES_VERSION, seg, vis: visOut, pts: handPreview(landmarks, !!(options && options.mirrored)) };
+}
+
+export function isHandFeature(f) {
+  if (!f || !f.seg || typeof f.seg !== "object") return false;
+  return HAND_SEGMENTS.some(([name]) => Array.isArray(f.seg[name]));
 }
 
 export function averageFeatures(list) {
