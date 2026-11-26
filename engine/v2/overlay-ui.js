@@ -125,10 +125,17 @@ export function bodyHeight(lm) {
   const ankleL = lm[LANDMARK.left_ankle];
   const ankleR = lm[LANDMARK.right_ankle];
   const top = nose && visibilityOf(nose) >= MIN_JOINT_VISIBILITY ? nose.y : null;
+  if (top === null) return 0;
   const bottoms = [];
   if (ankleL && visibilityOf(ankleL) >= MIN_JOINT_VISIBILITY) bottoms.push(ankleL.y);
   if (ankleR && visibilityOf(ankleR) >= MIN_JOINT_VISIBILITY) bottoms.push(ankleR.y);
-  if (top === null || !bottoms.length) return 0;
+  if (!bottoms.length) {
+    ["left_hip", "right_hip"].forEach((n) => {
+      const p = lm[LANDMARK[n]];
+      if (p && visibilityOf(p) >= MIN_JOINT_VISIBILITY) bottoms.push(p.y);
+    });
+  }
+  if (!bottoms.length) return 0;
   return Math.abs(Math.max.apply(null, bottoms) - top);
 }
 
@@ -280,10 +287,18 @@ export function createPoseOverlay(options) {
   function framingAlert(frame, running) {
     if (!running || !frame || !frame.landmarks) return "";
     const lm = frame.landmarks;
+    const up = ["left_shoulder", "right_shoulder"].every((n) => {
+      const p = lm[LANDMARK[n]];
+      return p && visibilityOf(p) >= MIN_JOINT_VISIBILITY;
+    });
+    const low = ["left_hip", "right_hip"].some((n) => {
+      const p = lm[LANDMARK[n]];
+      return p && visibilityOf(p) >= MIN_JOINT_VISIBILITY;
+    });
+    if (up && !low) return "";
     const h = bodyHeight(lm);
     if (!h) return texts.outFrame;
     if (h > FRAME_MAX_HEIGHT) return texts.tooFar;
-    if (!feetVisible(lm)) return texts.outFrame;
     if (h < FRAME_MIN_HEIGHT) return texts.tooNear;
     return "";
   }

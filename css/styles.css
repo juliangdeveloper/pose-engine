@@ -392,6 +392,10 @@ button { font: inherit; color: inherit; }
 .pose-line { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; min-width: 0; }
 .pose-name { min-width: 0; font-size: 17px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--muted); }
 .pose-name[data-state="on"] { color: var(--text); }
+.pose-line-hand { min-height: 0; }
+.pose-line-hand[hidden] { display: none; }
+.pose-line-hand .pose-name { font-size: 13px; }
+.pose-line-hand .pose-pct { font-size: 12px; }
 .pose-name.flash { animation: name-in 0.45s ease-out; }
 .pose-pct { flex: 0 0 auto; font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--muted); }
 
@@ -439,8 +443,9 @@ button { font: inherit; color: inherit; }
   position: absolute;
   z-index: 2;
   top: 12px;
-  left: 50%;
-  width: min(calc(100% - 24px), 420px);
+  left: 12px;
+  width: calc(100% - 112px);
+  max-width: 420px;
   display: grid;
   grid-template-columns: auto 1fr;
   align-items: center;
@@ -449,7 +454,6 @@ button { font: inherit; color: inherit; }
   border-radius: 16px;
   background: rgba(23, 26, 33, 0.9);
   border: 1px solid var(--line);
-  transform: translateX(-50%);
   overflow: hidden;
   pointer-events: none;
 }

@@ -16,8 +16,8 @@
   <title>Pose Engine</title>
   <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="assets/icon-180.png">
-  <link rel="manifest" href="manifest.json?v=0.10.0">
-  <link rel="stylesheet" href="css/styles.css?v=0.10.0">
+  <link rel="manifest" href="manifest.json?v=0.10.1">
+  <link rel="stylesheet" href="css/styles.css?v=0.10.1">
 </head>
 <body>
   <header class="bar">
@@ -82,6 +82,10 @@
             <span class="pose-name" id="pose-name"></span>
             <span class="pose-pct" id="pose-pct"></span>
           </div>
+          <div class="pose-line pose-line-hand" id="pose-line-hand" hidden>
+            <span class="pose-name" id="pose-hand"></span>
+            <span class="pose-pct" id="pose-hand-pct"></span>
+          </div>
           <div class="meter" aria-hidden="true"><span class="meter-fill" id="meter-fill"></span></div>
           <ol class="seq" id="seq"></ol>
           <p class="hint" id="hint"></p>
@@ -141,6 +145,6 @@
     </form>
   </dialog>
 
-  <script type="module" src="js/app.js?v=0.10.0"></script>
+  <script type="module" src="js/app.js?v=0.10.1"></script>
 </body>
 </html>

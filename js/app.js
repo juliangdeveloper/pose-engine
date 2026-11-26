@@ -1,8 +1,8 @@
-import { createPoseEngine, SOURCE, STATUS, FACING, LENS, CAPTURE_STATE, CAPTURE_RESULT, CALIBRATION_RESULT, PREVIEW_JOINTS, HAND_PREVIEW_COUNT, HAND_BONES, POSE_EVENT, gradeFor, normalizeSequence, validCalibration } from "../engine/v2/index.js?v=0.10.0";
-import { createPoseOverlay } from "../engine/v2/overlay-ui.js?v=0.10.0";
-import { mountCapture } from "../engine/v2/capture-ui.js?v=0.10.0";
-import { mountLibrary } from "../engine/v2/library-ui.js?v=0.10.0";
-import { mountHands } from "../engine/v2/hands-ui.js?v=0.10.0";
+import { createPoseEngine, SOURCE, STATUS, FACING, LENS, CAPTURE_STATE, CAPTURE_RESULT, CALIBRATION_RESULT, PREVIEW_JOINTS, HAND_PREVIEW_COUNT, HAND_BONES, POSE_EVENT, gradeFor, normalizeSequence, validCalibration } from "../engine/v2/index.js?v=0.10.1";
+import { createPoseOverlay } from "../engine/v2/overlay-ui.js?v=0.10.1";
+import { mountCapture } from "../engine/v2/capture-ui.js?v=0.10.1";
+import { mountLibrary } from "../engine/v2/library-ui.js?v=0.10.1";
+import { mountHands } from "../engine/v2/hands-ui.js?v=0.10.1";
 import {
   APP_ID, APP_VERSION, CAMERA_KEY, LENS_KEY, CALIBRATION_KEY, DETAIL_KEY, DETAIL_ON, DETAIL_OFF, CALIBRATION_MAX, STATS_KEY, STAT, STATS, MAX_DPR, PERCENT, COLOR, TEXT,
   NAME_MAX, DESCRIPTION_MAX,
@@ -29,7 +29,7 @@ const canvas = $("overlay");
 const stage = $("stage");
 const ui = {
   counter: $("counter"), counterLabel: $("counter-label"), counterValue: $("counter-value"), counterSub: $("counter-sub"),
-  poseName: $("pose-name"), posePct: $("pose-pct"), meter: $("meter-fill"), seq: $("seq"), hint: $("hint"),
+  poseName: $("pose-name"), posePct: $("pose-pct"), poseLineHand: $("pose-line-hand"), poseHand: $("pose-hand"), poseHandPct: $("pose-hand-pct"), meter: $("meter-fill"), seq: $("seq"), hint: $("hint"),
   msg: $("stage-msg"), msgText: $("stage-text"), msgHint: $("stage-hint"), camera: $("btn-camera"), capture: $("btn-capture"),
   flip: $("btn-flip"), zoom: $("btn-zoom"), zoomLabel: $("zoom-label"), reset: $("btn-reset"), popGrade: $("pop-grade"),
   posesBtn: $("btn-poses"), movesBtn: $("btn-moves"), posesCount: $("poses-count"), movesCount: $("moves-count"),
@@ -94,6 +94,8 @@ function ghostTarget(frame) {
     const idx = move.step >= 0 ? (move.step + 1) % move.sequence.length : 0;
     return move.sequence[idx];
   }
+  if (frame.bodyActive && frame.bodyActive.id) return frame.bodyActive.id;
+  if (frame.bodyBest && frame.bodyBest.id) return frame.bodyBest.id;
   if (frame.active && frame.active.id) return frame.active.id;
   if (frame.best && frame.best.id) return frame.best.id;
   return null;
@@ -295,21 +297,32 @@ function renderHud(frame) {
   else if (!move) hint = TEXT.firstMove;
   ui.hint.textContent = hint;
   ui.hint.hidden = !hint;
-  const active = frame && frame.active;
-  const best = frame && frame.best;
+  const bodyActive = frame && (frame.bodyActive !== undefined ? frame.bodyActive : frame.active);
+  const handActive = frame && frame.handActive;
+  const bodyBest = frame && (frame.bodyBest !== undefined ? frame.bodyBest : frame.best);
+  const handBest = frame && frame.handBest;
   let name = TEXT.noPose;
   let value = 0;
   let level = "";
   let state = "off";
-  if (running && frame && !frame.features) name = TEXT.noBody;
-  else if (active) {
-    name = active.name;
-    value = active.proximity;
-    level = gradeFor(active.proximity).level;
+  if (running && frame && !frame.features && !handActive && !handBest) name = TEXT.noBody;
+  else if (bodyActive) {
+    name = bodyActive.name;
+    value = bodyActive.proximity;
+    level = gradeFor(bodyActive.proximity).level;
     state = "on";
-  } else if (best) {
-    name = TEXT.near + " " + best.name;
-    value = best.proximity;
+  } else if (bodyBest) {
+    name = TEXT.near + " " + bodyBest.name;
+    value = bodyBest.proximity;
+    state = "near";
+  } else if (handActive) {
+    name = handActive.name;
+    value = handActive.proximity;
+    level = gradeFor(handActive.proximity).level;
+    state = "on";
+  } else if (handBest) {
+    name = TEXT.near + " " + handBest.name;
+    value = handBest.proximity;
     state = "near";
   }
   ui.poseName.textContent = name;
@@ -318,6 +331,22 @@ function renderHud(frame) {
   ui.meter.style.transform = "scaleX(" + value.toFixed(3) + ")";
   ui.meter.dataset.level = level;
   ui.meter.dataset.state = state;
+  let handName = "";
+  let handValue = 0;
+  let handState = "off";
+  if (handActive) {
+    handName = handActive.name;
+    handValue = handActive.proximity;
+    handState = "on";
+  } else if (handBest) {
+    handName = TEXT.near + " " + handBest.name;
+    handValue = handBest.proximity;
+    handState = "near";
+  }
+  ui.poseLineHand.hidden = !handName;
+  ui.poseHand.textContent = handName;
+  ui.poseHand.dataset.state = handState;
+  ui.poseHandPct.textContent = handState === "off" ? "" : pct(handValue);
 }
 
 function readCalibrations() {

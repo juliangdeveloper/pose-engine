@@ -13,7 +13,7 @@ import { createHandLandmarker, createDistanceGate, bodyScale, HAND_MODEL, HAND_S
 import { openCamera, closeCamera, retuneLens, readCameraState, emptyCameraState, FACING, LENS, CAMERA_ERROR, CameraError, CAMERA_RELEASE_MS } from "./camera.js";
 import { OVERLAY_DEFAULTS, DETAIL_JOINTS, angleAt, jointAngles, targetJointAngles, angleWithin, drawAngleArcs, segmentForConnection, segmentSpeeds, speedStyle, velocityStyles, drawVelocitySkeleton, depthIndicators, drawDepthIndicators, coincidenceFromMapped, coincidenceFromBad, drawMatchJoints, drawMatchPercent, buildDetail } from "./overlay.js";
 
-export const ENGINE_VERSION = "0.10.0";
+export const ENGINE_VERSION = "0.10.1";
 export const SOURCE = Object.freeze({ CAMERA: "camera", VIDEO: "video" });
 export const STATUS = Object.freeze({ LOADING_MODEL: "loading-model", OPENING_CAMERA: "opening-camera", RUNNING: "running", STOPPED: "stopped" });
 export const ENGINE_ERROR = Object.freeze(Object.assign({ MODEL_FAILED: "model-failed", DETECT_FAILED: "detect-failed", NO_VIDEO: "no-video" }, CAMERA_ERROR));
@@ -53,7 +53,8 @@ export function createPoseEngine(options) {
   const worldHold = createVisibilityHold(o.hold);
   const depth = createDepthEstimator(o.depth);
   const motionTracker = createMotionTracker();
-  const matcher = createPoseMatcher(o.match);
+  const bodyMatcher = createPoseMatcher(o.match);
+  const handMatcher = createPoseMatcher(o.match);
   const tracker = createMovementTracker();
   const capture = createCaptureFlow(o.capture);
   const calibrator = createCalibrationFlow(o.calibrationOptions);
@@ -135,7 +136,8 @@ export function createPoseEngine(options) {
 
   function setPoses(list) {
     poses = (Array.isArray(list) ? list : []).filter((p) => p && typeof p.id === "string" && p.seg && typeof p.seg === "object").map(upgradeFeatures);
-    matcher.setPoses(poses);
+    bodyMatcher.setPoses(poses.filter((p) => p.kind !== CAPTURE_KIND.HAND));
+    handMatcher.setPoses(poses.filter((p) => p.kind === CAPTURE_KIND.HAND));
     tracker.setMovements(movements, poses.map((p) => p.id));
     hasHands = poses.some((p) => p.kind === CAPTURE_KIND.HAND);
     if (hasHands && !landmarker) loadLandmarker();
@@ -268,23 +270,29 @@ export function createPoseEngine(options) {
     let touched = pendingTouch;
     if (capKind === CAPTURE_KIND.HAND && !handReady) touched = false;
     else pendingTouch = false;
-    const activeFeatures = capKind === CAPTURE_KIND.HAND ? handFeaturesCache : (hands.near && handFeaturesCache ? handFeaturesCache : features);
-    const cap = capture.update(activeFeatures, t, touched);
+    const captureFeatures = capKind === CAPTURE_KIND.HAND ? handFeaturesCache : features;
+    const cap = capture.update(captureFeatures, t, touched);
     const key = captureKey(cap.snapshot);
     if (key !== lastCaptureKey || cap.result) {
       lastCaptureKey = key;
       emit("capture", Object.assign({}, cap.snapshot, { result: cap.result ? cap.result.type : null, features: cap.result ? cap.result.features : null, kind: cap.result ? cap.result.kind : cap.snapshot.kind }));
     }
-    const match = matcher.update(activeFeatures, t);
-    if (match.left) emit("pose", Object.assign({ type: POSE_EVENT.LEAVE }, match.left));
-    if (match.entered) {
-      emit("pose", Object.assign({ type: POSE_EVENT.ENTER }, match.entered));
-      if (!capture.active() && !calibrator.active()) tracker.enter(match.entered.id, match.entered.proximity, t).reps.forEach((r) => emit("rep", r));
-    }
-    if (match.active) tracker.track(match.active.id, match.active.proximity);
+    const bodyMatch = bodyMatcher.update(features, t);
+    const handMatch = handMatcher.update(handFeaturesCache, t);
+    const proximity = Object.assign({}, bodyMatch.proximity, handMatch.proximity);
+    const best = handMatch.best && bodyMatch.best ? (handMatch.best.proximity >= bodyMatch.best.proximity ? handMatch.best : bodyMatch.best) : (handMatch.best || bodyMatch.best);
+    const active = handMatch.active && bodyMatch.active ? handMatch.active : (handMatch.active || bodyMatch.active);
+    [bodyMatch, handMatch].forEach((m) => {
+      if (m.left) emit("pose", Object.assign({ type: POSE_EVENT.LEAVE }, m.left));
+      if (m.entered) {
+        emit("pose", Object.assign({ type: POSE_EVENT.ENTER }, m.entered));
+        if (!capture.active() && !calibrator.active()) tracker.enter(m.entered.id, m.entered.proximity, t).reps.forEach((r) => emit("rep", r));
+      }
+      if (m.active) tracker.track(m.active.id, m.active.proximity);
+    });
     lastFrame = {
       t, width, height, source, delegate, fps, mirrored, landmarks, worldLandmarks: world, features, handFeatures: handFeaturesCache, handLandmarks: handLandmarksCache, motion,
-      tpose: isTPose(features), proximity: match.proximity, best: match.best, active: match.active,
+      tpose: isTPose(features), proximity, best, active, bodyActive: bodyMatch.active, handActive: handMatch.active, bodyBest: bodyMatch.best, handBest: handMatch.best,
       movements: tracker.snapshot(), capture: cap.snapshot, calibration: cal.snapshot, calibrated: !!calibration, hands,
     };
     emit("frame", lastFrame);
@@ -349,7 +357,8 @@ export function createPoseEngine(options) {
     worldHold.reset();
     depth.reset();
     motionTracker.reset();
-    matcher.reset();
+    bodyMatcher.reset();
+    handMatcher.reset();
     gate.reset();
     handFeaturesCache = null;
     handLandmarksCache = null;
@@ -477,7 +486,8 @@ export function createPoseEngine(options) {
 
   function reset() {
     tracker.reset();
-    matcher.reset();
+    bodyMatcher.reset();
+    handMatcher.reset();
   }
 
   function getHands() {
@@ -491,7 +501,7 @@ export function createPoseEngine(options) {
   function getState() {
     return {
       running, source, delegate, facingMode: facing, fps, zoom, lens, capabilities, deviceId: videoDeviceId(stream),
-      poses: poses.length, movements: tracker.snapshot(), active: matcher.active(), capturing: capture.active(),
+      poses: poses.length, movements: tracker.snapshot(), active: bodyMatcher.active() || handMatcher.active(), bodyActive: bodyMatcher.active(), handActive: handMatcher.active(), capturing: capture.active(),
       calibrating: calibrator.active(), calibration, hands: getHands(),
     };
   }
