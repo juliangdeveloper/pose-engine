@@ -1,5 +1,5 @@
 export const APP_ID = "pose-engine";
-export const APP_VERSION = "0.8.1";
+export const APP_VERSION = "0.9.0";
 export const STATS_KEY = "pose-engine.stats";
 export const CAMERA_KEY = "pose-engine.camera";
 export const LENS_KEY = "pose-engine.lens";
@@ -8,6 +8,7 @@ export const CALIBRATION_KEY = "pose-engine.calibration";
 export const DETAIL_KEY = "pose-engine.detail";
 export const DETAIL_ON = "1";
 export const DETAIL_OFF = "0";
+export const GESTURES_KEY = "pose-engine.gestures";
 export const SEEDED_KEY = "pose-engine.seeded";
 export const CALIBRATION_MAX = 6;
 export const EXPORT_FORMAT = 1;

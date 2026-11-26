@@ -1,9 +1,10 @@
-import { createPoseEngine, SOURCE, STATUS, FACING, LENS, CAPTURE_STATE, CAPTURE_RESULT, CALIBRATION_RESULT, PREVIEW_JOINTS, POSE_EVENT, gradeFor, normalizeSequence, validCalibration } from "../engine/v2/index.js?v=0.8.1";
-import { createPoseOverlay } from "../engine/v2/overlay-ui.js?v=0.8.1";
-import { mountCapture } from "../engine/v2/capture-ui.js?v=0.8.1";
-import { mountLibrary } from "../engine/v2/library-ui.js?v=0.8.1";
+import { createPoseEngine, SOURCE, STATUS, FACING, LENS, CAPTURE_STATE, CAPTURE_RESULT, CALIBRATION_RESULT, PREVIEW_JOINTS, POSE_EVENT, GESTURES, GESTURE_EVENT, gradeFor, normalizeSequence, validCalibration } from "../engine/v2/index.js?v=0.9.0";
+import { createPoseOverlay } from "../engine/v2/overlay-ui.js?v=0.9.0";
+import { mountCapture } from "../engine/v2/capture-ui.js?v=0.9.0";
+import { mountLibrary } from "../engine/v2/library-ui.js?v=0.9.0";
+import { mountGestures } from "../engine/v2/gesture-ui.js?v=0.9.0";
 import {
-  APP_ID, APP_VERSION, CAMERA_KEY, LENS_KEY, CALIBRATION_KEY, DETAIL_KEY, DETAIL_ON, DETAIL_OFF, CALIBRATION_MAX, STATS_KEY, STAT, STATS, MAX_DPR, PERCENT, COLOR, TEXT,
+  APP_ID, APP_VERSION, CAMERA_KEY, LENS_KEY, CALIBRATION_KEY, DETAIL_KEY, DETAIL_ON, DETAIL_OFF, GESTURES_KEY, CALIBRATION_MAX, STATS_KEY, STAT, STATS, MAX_DPR, PERCENT, COLOR, TEXT,
   NAME_MAX, DESCRIPTION_MAX,
 } from "./config.js";
 import { loadLibrary, saveLibrary, exportLibrary, parseImport, mergeLibrary, newId, nextName, playable, resetLibrary } from "./library.js";
@@ -58,6 +59,7 @@ function writeKey(key, value) {
 
 let library = loadLibrary();
 let detailOn = readKey(DETAIL_KEY, [DETAIL_ON, DETAIL_OFF], DETAIL_OFF) === DETAIL_ON;
+let gesturesOn = readKey(GESTURES_KEY, [DETAIL_ON, DETAIL_OFF], DETAIL_OFF) === DETAIL_ON;
 const engine = createPoseEngine({
   video,
   facingMode: readKey(CAMERA_KEY, [FACING.USER, FACING.ENVIRONMENT], FACING.USER),
@@ -124,6 +126,24 @@ function renderCaptureUI(snapshot) {
     capturedNote,
     calibrationNote,
   });
+}
+
+const gestureUI = mountGestures(stage, {
+  onToggle: () => {
+    gesturesOn = !gesturesOn;
+    writeKey(GESTURES_KEY, gesturesOn ? DETAIL_ON : DETAIL_OFF);
+    renderGestures();
+  },
+});
+
+function renderGestures() {
+  engine.setGestures(gesturesOn ? GESTURES : []);
+  renderGestureState(engine.getState().gestureState);
+}
+
+function renderGestureState(state) {
+  const shown = running || state === "loading" || state === "failed" ? state : "idle";
+  gestureUI.render({ state: shown, id: null }, gesturesOn);
 }
 
 const libraryUI = mountLibrary(document.body, {
@@ -649,6 +669,7 @@ function stopAll() {
   overlay.clear();
   showMessage(TEXT.idle, TEXT.idleHint);
   renderHud(null);
+  renderGestures();
 }
 
 function addCapturedPose(features) {
@@ -668,6 +689,7 @@ engine.on("status", (s) => {
 engine.on("frame", (frame) => {
   lastFrame = frame;
   overlay.draw(frame);
+  gestureUI.render(frame.gesture, gesturesOn);
   renderHud(frame);
   renderCaptureUI(frame.capture);
 });
@@ -695,6 +717,14 @@ engine.on("calibration", (c) => {
 
 engine.on("pose", (p) => {
   if (p.type === POSE_EVENT.ENTER) restart(ui.poseName, "flash");
+});
+
+engine.on("gesture-state", (s) => {
+  if (!running) renderGestureState(s.state);
+});
+
+engine.on("gesture", (g) => {
+  if (g.type === GESTURE_EVENT.ENTER) restart(gestureUI.element, "bump");
 });
 
 engine.on("rep", (r) => {
@@ -831,6 +861,7 @@ $("bar-version").textContent = "v" + APP_VERSION;
 $("info-version").textContent = "v" + APP_VERSION;
 syncEngine();
 renderDetailButton();
+renderGestures();
 renderCaptureUI(null);
 resizeCanvas();
 showMessage(TEXT.idle, TEXT.idleHint);

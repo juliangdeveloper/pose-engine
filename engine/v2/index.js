@@ -9,10 +9,11 @@ import { createCalibrationFlow, computeCalibration, validCalibration, missingPar
 import { createMediaPipeDetector, DELEGATE, MODEL, TASKS_VISION_VERSION } from "./detector.js";
 import { createDepthEstimator, DEPTH_DEFAULTS } from "./depth.js";
 import { createMotionTracker } from "./motion.js";
+import { createGestureRecognizer, createGestureTracker, createDistanceGate, bodyScale, isGesture, GESTURE, GESTURES, GESTURE_LABEL, GESTURE_STATE, GESTURE_EVENT, GESTURE_MODEL, GESTURE_DEFAULTS } from "./gestures.js";
 import { openCamera, closeCamera, retuneLens, readCameraState, emptyCameraState, FACING, LENS, CAMERA_ERROR, CameraError, CAMERA_RELEASE_MS } from "./camera.js";
 import { OVERLAY_DEFAULTS, DETAIL_JOINTS, angleAt, jointAngles, targetJointAngles, angleWithin, drawAngleArcs, segmentForConnection, segmentSpeeds, speedStyle, velocityStyles, drawVelocitySkeleton, depthIndicators, drawDepthIndicators, coincidenceFromMapped, coincidenceFromBad, drawMatchJoints, drawMatchPercent, buildDetail } from "./overlay.js";
 
-export const ENGINE_VERSION = "0.8.1";
+export const ENGINE_VERSION = "0.9.0";
 export const SOURCE = Object.freeze({ CAMERA: "camera", VIDEO: "video" });
 export const STATUS = Object.freeze({ LOADING_MODEL: "loading-model", OPENING_CAMERA: "opening-camera", RUNNING: "running", STOPPED: "stopped" });
 export const ENGINE_ERROR = Object.freeze(Object.assign({ MODEL_FAILED: "model-failed", DETECT_FAILED: "detect-failed", NO_VIDEO: "no-video" }, CAMERA_ERROR));
@@ -28,6 +29,7 @@ export { CALIBRATION_STATE, CALIBRATION_RESULT, CALIBRATION_DEFAULTS, CALIBRATIO
 export { poseFeatures, averageFeatures, compareFeatures, upgradeFeatures, isTPose, bodyFrame, gradeFor, normalizeSequence };
 export { createCalibrationFlow, computeCalibration, validCalibration, missingParts };
 export { createPoseMatcher, createMovementTracker, createCaptureFlow, createMediaPipeDetector, createOneEuroFilter, createLandmarkSmoother, createVisibilityHold, createDepthEstimator, createMotionTracker };
+export { GESTURE, GESTURES, GESTURE_LABEL, GESTURE_STATE, GESTURE_EVENT, GESTURE_MODEL, GESTURE_DEFAULTS, isGesture, bodyScale, createGestureRecognizer, createGestureTracker, createDistanceGate };
 export { OVERLAY_DEFAULTS, DETAIL_JOINTS, angleAt, jointAngles, targetJointAngles, angleWithin, drawAngleArcs, segmentForConnection, segmentSpeeds, speedStyle, velocityStyles, drawVelocitySkeleton, depthIndicators, drawDepthIndicators, coincidenceFromMapped, coincidenceFromBad, drawMatchJoints, drawMatchPercent, buildDetail };
 
 function wait(ms) {
@@ -75,6 +77,15 @@ export function createPoseEngine(options) {
   let lastVideoTime = -1;
   let lastFrame = null;
   let lastCaptureKey = "";
+  const gestureOptions = Object.assign({}, GESTURE_DEFAULTS, o.gestureOptions);
+  const gate = createDistanceGate(gestureOptions);
+  const gestureTracker = createGestureTracker(gestureOptions);
+  let gestureIds = [];
+  let recognizer = null;
+  let recognizerReady = false;
+  let recognizerBusy = false;
+  let gestureState = GESTURE_STATE.OFF;
+  let gestureTick = 0;
 
   function cameraOptions(extra) {
     const opts = { facingMode: facing, lens };
@@ -133,6 +144,84 @@ export function createPoseEngine(options) {
     return movements.length;
   }
 
+  function releaseGesture(t) {
+    const left = gestureTracker.release();
+    if (left) emit("gesture", { type: GESTURE_EVENT.LEAVE, id: left.id, label: GESTURE_LABEL[left.id], score: left.score, t });
+  }
+
+  function settleGestureState() {
+    const previous = gestureState;
+    if (!gestureIds.length) gestureState = GESTURE_STATE.OFF;
+    else if (!recognizerReady) gestureState = recognizer ? GESTURE_STATE.LOADING : GESTURE_STATE.FAILED;
+    else gestureState = gate.near() ? GESTURE_STATE.NEAR : GESTURE_STATE.FAR;
+    if (gestureState !== previous) emit("gesture-state", { state: gestureState });
+  }
+
+  function loadRecognizer() {
+    const d = o.detectorOptions || {};
+    const r = createGestureRecognizer(Object.assign({ tasksVisionUrl: d.tasksVisionUrl, wasmBase: d.wasmBase, delegate: d.delegate }, o.gestureRecognizerOptions));
+    recognizer = r;
+    recognizerReady = false;
+    settleGestureState();
+    r.init().then(() => {
+      if (recognizer !== r) return;
+      recognizerReady = true;
+      settleGestureState();
+    }, () => {
+      if (recognizer !== r) return;
+      recognizer = null;
+      settleGestureState();
+    });
+  }
+
+  function setGestures(list) {
+    const next = [];
+    (Array.isArray(list) ? list : []).forEach((id) => { if (isGesture(id) && next.indexOf(id) === -1) next.push(id); });
+    gestureIds = next;
+    const active = gestureTracker.active();
+    if (active && next.indexOf(active) === -1) releaseGesture(performance.now());
+    if (next.length && !recognizer) loadRecognizer();
+    if (!next.length) gate.reset();
+    settleGestureState();
+    return next.length;
+  }
+
+  function recognizeGesture(src, t) {
+    let r = null;
+    try {
+      r = recognizer.recognize(src, t);
+    } catch (e) {
+      recognizerBusy = true;
+      const current = recognizer;
+      current.recover().then((ok) => {
+        recognizerBusy = false;
+        if (!ok && recognizer === current) { recognizer = null; recognizerReady = false; settleGestureState(); }
+      }, () => {
+        recognizerBusy = false;
+        if (recognizer === current) { recognizer = null; recognizerReady = false; settleGestureState(); }
+      });
+      return;
+    }
+    const id = r && gestureIds.indexOf(r.id) !== -1 ? r.id : null;
+    const out = gestureTracker.update(id, r ? r.score : 0, t);
+    if (out.left) emit("gesture", { type: GESTURE_EVENT.LEAVE, id: out.left.id, label: GESTURE_LABEL[out.left.id], score: out.left.score, t });
+    if (out.entered) emit("gesture", { type: GESTURE_EVENT.ENTER, id: out.entered.id, label: GESTURE_LABEL[out.entered.id], score: out.entered.score, t });
+  }
+
+  function stepGestures(src, t, landmarks, width, height) {
+    if (gestureIds.length) {
+      const near = gate.update(bodyScale(landmarks, width, height, gestureOptions.minVisibility), t);
+      if (!near) releaseGesture(t);
+      settleGestureState();
+      if (near && src && recognizerReady && !recognizerBusy) {
+        gestureTick = (gestureTick + 1) % Math.max(1, gestureOptions.everyFrames);
+        if (gestureTick === 0) recognizeGesture(src, t);
+      }
+    }
+    const active = gestureTracker.active();
+    return { state: gestureState, id: active, label: active ? GESTURE_LABEL[active] : "" };
+  }
+
   function mirroredNow() {
     return source === SOURCE.CAMERA && facing === FACING.USER;
   }
@@ -145,7 +234,7 @@ export function createPoseEngine(options) {
     return s.state + ":" + Math.round(s.progress * 20) + ":" + s.missing.join(",");
   }
 
-  function process(result, t, width, height) {
+  function process(result, t, width, height, src) {
     if (lastT !== null) {
       const dt = t - lastT;
       if (dt > 0) fps = fps ? fps + FPS_SMOOTHING * (MS_PER_S / dt - fps) : MS_PER_S / dt;
@@ -188,10 +277,11 @@ export function createPoseEngine(options) {
       if (!capture.active() && !calibrator.active()) tracker.enter(match.entered.id, match.entered.proximity, t).reps.forEach((r) => emit("rep", r));
     }
     if (match.active) tracker.track(match.active.id, match.active.proximity);
+    const gesture = stepGestures(src, t, landmarks, width, height);
     lastFrame = {
       t, width, height, source, delegate, fps, mirrored, landmarks, worldLandmarks: world, features, motion,
       tpose: isTPose(features), proximity: match.proximity, best: match.best, active: match.active,
-      movements: tracker.snapshot(), capture: cap.snapshot, calibration: cal.snapshot, calibrated: !!calibration,
+      movements: tracker.snapshot(), capture: cap.snapshot, calibration: cal.snapshot, calibrated: !!calibration, gesture,
     };
     emit("frame", lastFrame);
     return lastFrame;
@@ -224,7 +314,7 @@ export function createPoseEngine(options) {
         }, (e2) => { fail(ENGINE_ERROR.DETECT_FAILED, e2); stop(); });
         return;
       }
-      process(result, t, video.videoWidth, video.videoHeight);
+      process(result, t, video.videoWidth, video.videoHeight, video);
     }
     scheduleVideo(id);
   }
@@ -256,6 +346,9 @@ export function createPoseEngine(options) {
     depth.reset();
     motionTracker.reset();
     matcher.reset();
+    gate.reset();
+    releaseGesture(performance.now());
+    settleGestureState();
     lastT = null;
     fps = 0;
     if (!video) throw fail(ENGINE_ERROR.NO_VIDEO);
@@ -286,6 +379,9 @@ export function createPoseEngine(options) {
     clearCameraReadout();
     if (capture.active()) cancelCapture();
     if (calibrator.active()) cancelCalibration();
+    releaseGesture(performance.now());
+    gate.reset();
+    settleGestureState();
     if (was && !silent) emit("status", { state: STATUS.STOPPED, source });
   }
 
@@ -369,7 +465,7 @@ export function createPoseEngine(options) {
     return {
       running, source, delegate, facingMode: facing, fps, zoom, lens, capabilities, deviceId: videoDeviceId(stream),
       poses: poses.length, movements: tracker.snapshot(), active: matcher.active(), capturing: capture.active(),
-      calibrating: calibrator.active(), calibration,
+      calibrating: calibrator.active(), calibration, gestures: gestureIds.slice(), gestureState,
     };
   }
 
@@ -381,18 +477,23 @@ export function createPoseEngine(options) {
     stop(true);
     if (detector && detector.close) detector.close();
     detector = null;
+    if (recognizer) recognizer.close();
+    recognizer = null;
+    recognizerReady = false;
     Object.keys(listeners).forEach((k) => delete listeners[k]);
   }
 
   setPoses(o.poses);
   setMovements(o.movements);
+  if (o.gestures) setGestures(o.gestures);
 
   return {
     on, off, start, stop, reset, feed, destroy, switchCamera, setLens, getState,
-    setPoses, setMovements, startCapture, cancelCapture, startCalibration, cancelCalibration, setCalibration,
+    setPoses, setMovements, setGestures, startCapture, cancelCapture, startCalibration, cancelCalibration, setCalibration,
     capturing: () => capture.active(),
     calibrating: () => calibrator.active(),
     getCalibration: () => calibration,
+    getGestures: () => gestureIds.slice(),
     lastFrame: () => lastFrame,
   };
 }
