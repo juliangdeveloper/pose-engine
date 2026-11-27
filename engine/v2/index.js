@@ -13,7 +13,7 @@ import { createHandLandmarker, createDistanceGate, bodyScale, HAND_MODEL, HAND_S
 import { openCamera, closeCamera, retuneLens, readCameraState, emptyCameraState, FACING, LENS, CAMERA_ERROR, CameraError, CAMERA_RELEASE_MS } from "./camera.js";
 import { OVERLAY_DEFAULTS, DETAIL_JOINTS, angleAt, jointAngles, targetJointAngles, angleWithin, drawAngleArcs, segmentForConnection, segmentSpeeds, speedStyle, velocityStyles, drawVelocitySkeleton, drawHandSkeleton, depthIndicators, drawDepthIndicators, coincidenceFromMapped, coincidenceFromBad, drawMatchJoints, drawMatchPercent, buildDetail } from "./overlay.js";
 
-export const ENGINE_VERSION = "0.10.2";
+export const ENGINE_VERSION = "0.10.3";
 export const SOURCE = Object.freeze({ CAMERA: "camera", VIDEO: "video" });
 export const STATUS = Object.freeze({ LOADING_MODEL: "loading-model", OPENING_CAMERA: "opening-camera", RUNNING: "running", STOPPED: "stopped" });
 export const ENGINE_ERROR = Object.freeze(Object.assign({ MODEL_FAILED: "model-failed", DETECT_FAILED: "detect-failed", NO_VIDEO: "no-video" }, CAMERA_ERROR));

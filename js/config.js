@@ -1,5 +1,5 @@
 export const APP_ID = "pose-engine";
-export const APP_VERSION = "0.10.2";
+export const APP_VERSION = "0.10.3";
 export const STATS_KEY = "pose-engine.stats";
 export const CAMERA_KEY = "pose-engine.camera";
 export const LENS_KEY = "pose-engine.lens";
@@ -112,6 +112,8 @@ export const TEXT = Object.freeze({
   noPose: "Sin pose",
   noBody: "No se ve el cuerpo",
   near: "Cerca de",
+  noHand: "Sin mano",
+  handDetected: "Mano detectada",
   firstPose: "Pulsa Capturar para guardar tu primera pose.",
   firstMove: "Arma un movimiento en Movimientos.",
   waitT: "Haz la pose T para capturar",
