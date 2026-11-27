@@ -1,4 +1,5 @@
 import { mountReset } from "./reset-ui.js";
+import { formatKeys } from "./keys.js";
 
 const TAB = Object.freeze({ POSES: "poses", MOVES: "moves" });
 const VIEW = Object.freeze({ POSES: "poses", MOVES: "moves", POSE: "pose", MOVE: "move", IMPORT: "import" });
@@ -251,6 +252,15 @@ export function mountLibrary(host, options) {
     if (!p) return renderPosesList();
     const name = input(p.name, o.nameMax || 40);
     const desc = textarea(p.description, o.descriptionMax || 160);
+    const keysInput = input(formatKeys(p.keys), 80);
+    keysInput.setAttribute("autocomplete", "off");
+    keysInput.spellcheck = false;
+    const holdBox = input("", 0);
+    holdBox.type = "checkbox";
+    holdBox.checked = p.hold === true;
+    const holdField = el("label", "field hold-field");
+    holdField.append(holdBox, el("span", "field-label", texts.hold || "Mantener tecla"));
+    if (texts.holdHint) holdField.append(el("span", "field-label field-hint", texts.holdHint));
     const preview = el("canvas", "preview");
     preview.setAttribute("aria-hidden", "true");
     if (typeof o.drawThumb === "function") o.drawThumb(preview, p.pts, PREVIEW_PX);
@@ -272,11 +282,18 @@ export function mountLibrary(host, options) {
       button("btn btn-primary", texts.save, () => {
         p.name = name.value.trim().slice(0, o.nameMax || 40) || p.name;
         p.description = desc.value.trim().slice(0, o.descriptionMax || 160);
+        const keys = keysInput.value.split(",").map((v) => v.trim()).filter(Boolean).slice(0, 12).map((v) => v.slice(0, 32));
+        if (keys.length) p.keys = keys;
+        else delete p.keys;
+        if (holdBox.checked) p.hold = true;
+        else delete p.hold;
         commit();
         show(VIEW.POSES);
       }),
     );
-    return [backBar(p.name, VIEW.POSES), top, field(texts.description, desc), actions];
+    const keysField = field(texts.keys || "Teclas", keysInput);
+    if (texts.keysHint) keysField.append(el("span", "field-label field-hint", texts.keysHint));
+    return [backBar(p.name, VIEW.POSES), top, field(texts.description, desc), keysField, holdField, actions];
   }
 
   function renderMoveEdit() {

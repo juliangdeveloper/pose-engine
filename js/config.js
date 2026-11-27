@@ -1,5 +1,5 @@
 export const APP_ID = "pose-engine";
-export const APP_VERSION = "0.10.4";
+export const APP_VERSION = "0.11.0";
 export const STATS_KEY = "pose-engine.stats";
 export const CAMERA_KEY = "pose-engine.camera";
 export const LENS_KEY = "pose-engine.lens";
@@ -44,11 +44,7 @@ export const GHOST_JOINT_PX = 3;
 export const GHOST_TOL_RATIO = 0.09;
 export const GHOST_ALPHA = 0.75;
 export const GHOST_MARGIN = 1.15;
-export const SIL_TORSO_RATIO = 0.6;
-export const SIL_ARM_RATIO = 0.3;
-export const SIL_LEG_RATIO = 0.36;
-export const SIL_HEAD_RATIO = 0.5;
-export const SIL_ALPHA = 0.55;
+export const SHADOW_ALPHA = 0.55;
 export const FADE_FLOOR = 0.18;
 export const OUTSIDE_FADE = 0.4;
 export const FRAME_MIN_HEIGHT = 0.45;
@@ -173,6 +169,11 @@ export const TEXT = Object.freeze({
   importAction: "Importar",
   name: "Nombre",
   description: "Descripción",
+  keys: "Teclas",
+  keysHint: "Letras separadas por coma, por ejemplo j, k. Salen al entrar a la pose.",
+  hold: "Mantener tecla",
+  holdHint: "La tecla se repite mientras la pose sigue activa.",
+  keySheet: "Teclas",
   sequence: "Secuencia",
   sequenceHint: "Toca una pose para agregarla al final.",
   sequenceEmpty: "Agrega al menos dos poses.",

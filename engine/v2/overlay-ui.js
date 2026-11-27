@@ -1,8 +1,9 @@
 import { CONNECTIONS, LANDMARK } from "./landmarks.js";
 import { PREVIEW_JOINTS, HAND_BONES } from "./features.js";
 import { jointAngles, targetJointAngles, angleWithin, drawAngleArcs, drawVelocitySkeleton, drawHandSkeleton, depthIndicators, drawDepthIndicators, coincidenceFromBad, drawMatchJoints, drawMatchPercent } from "./overlay.js";
+import { drawSilhouette } from "./background.js";
 
-export const OVERLAY_UI_DEFAULTS = Object.freeze({ style: "silhouette" });
+export const OVERLAY_UI_DEFAULTS = Object.freeze({ style: "shadow" });
 const JOINT_RADIUS_PX = 4;
 const BONE_WIDTH_PX = 4;
 const MIN_JOINT_VISIBILITY = 0.4;
@@ -42,11 +43,7 @@ const DETAIL_DEPTH_GROW_PX = 10;
 const DETAIL_MATCH_PX = 6;
 const DETAIL_PCT_PX = 13;
 const DETAIL_PCT_PAD_PX = 12;
-const SIL_TORSO_RATIO = 0.6;
-const SIL_ARM_RATIO = 0.3;
-const SIL_LEG_RATIO = 0.36;
-const SIL_HEAD_RATIO = 0.5;
-const SIL_ALPHA = 0.55;
+const SHADOW_ALPHA = 0.55;
 const TAU = Math.PI * 2;
 const HEAD_RADIUS_RATIO = 0.06;
 
@@ -77,6 +74,7 @@ export const OVERLAY_COLOR = Object.freeze({
   guideBad: "#ffb547",
   ghost: "#5aa9ff",
   ghostBad: "#ff6b6b",
+  shadow: "rgba(0,0,0," + SHADOW_ALPHA + ")",
 });
 
 export const OVERLAY_TEXT = Object.freeze({
@@ -103,7 +101,6 @@ export const GHOST_BONES = Object.freeze([
 
 const LUM_WEIGHT = Object.freeze([0.2126, 0.7152, 0.0722]);
 const LUM_CENTER = Object.freeze({ lo: 0.25, hi: 0.75 });
-const NOSE_INDEX = PREVIEW_JOINTS.indexOf("nose");
 
 export function visibilityOf(p) {
   return p && typeof p.visibility === "number" ? p.visibility : 1;
@@ -211,7 +208,7 @@ export function ghostMapped(pts, lm, mirrored) {
 
 export function createPoseOverlay(options) {
   const o = Object.assign({}, OVERLAY_UI_DEFAULTS, options || {});
-  const style = o.style === "line" ? "line" : "silhouette";
+  const style = o.style === "line" ? "line" : "shadow";
   const texts = Object.assign({}, OVERLAY_TEXT, o.texts || {});
   const ctx = o.canvas ? o.canvas.getContext("2d") : null;
   const leftJoints = new Set();
@@ -224,8 +221,6 @@ export function createPoseOverlay(options) {
   lumCanvas.width = LUM_SIZE;
   lumCanvas.height = LUM_SIZE;
   const lumCtx = lumCanvas.getContext("2d", { willReadFrequently: true });
-  const silCanvas = document.createElement("canvas");
-  const silCtx = silCanvas.getContext("2d");
   let destroyed = false;
 
   function stageBox() {
@@ -405,127 +400,10 @@ export function createPoseOverlay(options) {
     ctx.globalAlpha = 1;
   }
 
-  function boneRatio(index) {
-    if (index <= 3) return SIL_TORSO_RATIO;
-    if (index <= 7) return SIL_ARM_RATIO;
-    return SIL_LEG_RATIO;
-  }
-
-  function drawSilhouette(mapped, px, styleOfBone, styleOfJoint) {
-    const size = stageBox();
-    const w = size.w;
-    const h = size.h;
-    if (!w || !h) return;
-    const dpr = Math.min(window.devicePixelRatio || 1, MAX_DPR);
-    if (silCanvas.width !== Math.round(w * dpr) || silCanvas.height !== Math.round(h * dpr)) {
-      silCanvas.width = Math.round(w * dpr);
-      silCanvas.height = Math.round(h * dpr);
-    }
-    silCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    silCtx.clearRect(0, 0, w, h);
-    silCtx.lineCap = "round";
-    silCtx.lineJoin = "round";
-    const jointRadius = new Array(mapped.length).fill(0);
-    const jointColor = new Array(mapped.length).fill(null);
-    GHOST_BONES.forEach(([a, b], i) => {
-      const A = mapped[a];
-      const B = mapped[b];
-      if (!A || !B) return;
-      const PA = px(A);
-      const PB = px(B);
-      const len = Math.hypot(PB.x - PA.x, PB.y - PA.y);
-      if (!(len > 0)) return;
-      const bstyle = styleOfBone(i);
-      const width = Math.max(3, len * boneRatio(i));
-      silCtx.strokeStyle = bstyle.color;
-      silCtx.lineWidth = width;
-      silCtx.beginPath();
-      silCtx.moveTo(PA.x, PA.y);
-      silCtx.lineTo(PB.x, PB.y);
-      silCtx.stroke();
-      [a, b].forEach((j) => {
-        jointRadius[j] = Math.max(jointRadius[j], width * 0.52);
-        jointColor[j] = bstyle.color;
-      });
-    });
-    const nose = mapped[NOSE_INDEX];
-    const shoulderL = mapped[PREVIEW_JOINTS.indexOf("left_shoulder")];
-    const shoulderR = mapped[PREVIEW_JOINTS.indexOf("right_shoulder")];
-    if (nose && shoulderL && shoulderR) {
-      const N = px(nose);
-      const sl = px(shoulderL);
-      const sr = px(shoulderR);
-      const mid = { x: (sl.x + sr.x) / HALF, y: (sl.y + sr.y) / HALF };
-      const radius = Math.max(5, Math.hypot(N.x - mid.x, N.y - mid.y) * SIL_HEAD_RATIO);
-      silCtx.fillStyle = styleOfBone(0).color;
-      silCtx.beginPath();
-      silCtx.arc(N.x, N.y, radius, 0, TAU);
-      silCtx.fill();
-    }
-    mapped.forEach((g, i) => {
-      if (!g || !jointRadius[i]) return;
-      const G = px(g);
-      silCtx.fillStyle = styleOfJoint && styleOfJoint(i) ? styleOfJoint(i).color : jointColor[i];
-      silCtx.beginPath();
-      silCtx.arc(G.x, G.y, jointRadius[i], 0, TAU);
-      silCtx.fill();
-    });
-    ctx.save();
-    ctx.globalAlpha = SIL_ALPHA;
-    ctx.drawImage(silCanvas, 0, 0, w, h);
-    ctx.restore();
-    ctx.globalAlpha = 1;
-  }
-
-  const T_GUIDE_PTS = PREVIEW_JOINTS.map((name) => T_GUIDE[name] || null);
-
-  function drawGuideSilhouette(frame, px) {
-    const mapped = ghostMapped(T_GUIDE_PTS, frame.landmarks, frame.mirrored);
-    if (!mapped) return null;
-    const covered = {};
-    GUIDE_BONES.forEach(([aName, bName, orient]) => {
-      covered[aName + "|" + bName] = segmentCovered(frame.landmarks, aName, bName, orient);
-    });
-    const styleOfBone = (i) => {
-      const aName = PREVIEW_JOINTS[GHOST_BONES[i][0]];
-      const bName = PREVIEW_JOINTS[GHOST_BONES[i][1]];
-      const ok = covered[aName + "|" + bName] === true || (aName === "left_hip" && bName === "right_hip" ? covered["left_shoulder|right_shoulder"] === true : false);
-      return { color: ok ? OVERLAY_COLOR.guideOk : OVERLAY_COLOR.guideBad };
-    };
-    const styleOfJoint = (i) => {
-      const name = PREVIEW_JOINTS[i];
-      const bad = GUIDE_BONES.some(([aName, bName]) => (aName === name || bName === name) && covered[aName + "|" + bName] !== true);
-      return { color: bad ? OVERLAY_COLOR.guideBad : OVERLAY_COLOR.guideOk };
-    };
-    drawSilhouette(mapped, px, styleOfBone, styleOfJoint);
-    const bad = mapped.map((g, i) => !!g && styleOfJoint(i).color !== OVERLAY_COLOR.guideOk);
-    return { mapped, bad };
-  }
-
-  function drawGhostSilhouette(frame, box, px) {
-    const id = o.getTargetPoseId ? o.getTargetPoseId(frame) : null;
-    if (!id) return null;
-    const pose = o.getPoseById ? o.getPoseById(id) : null;
-    if (!pose) return null;
-    const mapped = ghostMapped(pose.pts, frame.landmarks, frame.mirrored);
-    if (!mapped) return null;
-    const h = Math.max(box.h, 1);
-    const tol = GHOST_TOL_RATIO * h;
-    const bad = new Array(mapped.length).fill(false);
-    mapped.forEach((g, i) => {
-      if (!g) return;
-      const name = PREVIEW_JOINTS[i];
-      const player = frame.landmarks && frame.landmarks[LANDMARK[name]];
-      if (player && visibilityOf(player) >= MIN_JOINT_VISIBILITY && isFinite(player.x) && isFinite(player.y)) {
-        const P = px(player);
-        const G = px(g);
-        bad[i] = Math.hypot(P.x - G.x, P.y - G.y) > tol;
-      }
-    });
-    const styleOfBone = (i) => ({ color: bad[GHOST_BONES[i][0]] || bad[GHOST_BONES[i][1]] ? OVERLAY_COLOR.ghostBad : OVERLAY_COLOR.ghost });
-    const styleOfJoint = (i) => ({ color: bad[i] ? OVERLAY_COLOR.ghostBad : OVERLAY_COLOR.ghost });
-    drawSilhouette(mapped, px, styleOfBone, styleOfJoint);
-    return { mapped, bad };
+  function drawShadow(frame, box) {
+    const silhouette = frame && frame.silhouette;
+    if (!silhouette || !silhouette.data) return;
+    drawSilhouette(ctx, silhouette, box, {});
   }
 
   function drawGuideLine(frame, box, mirrored) {
@@ -624,12 +502,10 @@ export function createPoseOverlay(options) {
     const px = (p) => ({ x: box.x + (frame.mirrored ? 1 - p.x : p.x) * box.w, y: box.y + p.y * box.h });
     let target = null;
     if (lm) {
+      drawShadow(frame, box);
       const calibrating = o.isCalibrating ? o.isCalibrating() : false;
-      if (calibrating) {
-        if (style === "line") drawGuideLine(frame, box, frame.mirrored);
-        else target = drawGuideSilhouette(frame, px);
-      } else if (style === "line") target = drawGhostLine(frame, box, px);
-      else target = drawGhostSilhouette(frame, box, px);
+      if (calibrating) drawGuideLine(frame, box, frame.mirrored);
+      else target = drawGhostLine(frame, box, px);
       const detail = o.isDetail ? o.isDetail() : false;
       if (detail) drawSkeletonDetail(frame, lm, px);
       else drawSkeleton(lm, box, px);

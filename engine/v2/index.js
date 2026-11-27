@@ -12,8 +12,10 @@ import { createMotionTracker } from "./motion.js";
 import { createHandLandmarker, createDistanceGate, bodyScale, HAND_MODEL, HAND_STATE, HAND_DEFAULTS } from "./hands.js";
 import { openCamera, closeCamera, retuneLens, readCameraState, emptyCameraState, FACING, LENS, CAMERA_ERROR, CameraError, CAMERA_RELEASE_MS } from "./camera.js";
 import { OVERLAY_DEFAULTS, DETAIL_JOINTS, angleAt, jointAngles, targetJointAngles, angleWithin, drawAngleArcs, segmentForConnection, segmentSpeeds, speedStyle, velocityStyles, drawVelocitySkeleton, drawHandSkeleton, depthIndicators, drawDepthIndicators, coincidenceFromMapped, coincidenceFromBad, drawMatchJoints, drawMatchPercent, buildDetail } from "./overlay.js";
+import { createKeyDispatcher, parseKeys, formatKeys, parseCombo, KEY_DEFAULTS, KEY_ACTIONS } from "./keys.js";
+import { createBackgroundRemover, createSegmenter, maskToUint8, maskStats, silhouetteColliders, drawSilhouette, BG_MODE, BG_DEFAULTS, SEGMENTER_MODEL } from "./background.js";
 
-export const ENGINE_VERSION = "0.10.4";
+export const ENGINE_VERSION = "0.11.0";
 export const SOURCE = Object.freeze({ CAMERA: "camera", VIDEO: "video" });
 export const STATUS = Object.freeze({ LOADING_MODEL: "loading-model", OPENING_CAMERA: "opening-camera", RUNNING: "running", STOPPED: "stopped" });
 export const ENGINE_ERROR = Object.freeze(Object.assign({ MODEL_FAILED: "model-failed", DETECT_FAILED: "detect-failed", NO_VIDEO: "no-video" }, CAMERA_ERROR));
@@ -30,6 +32,8 @@ export { poseFeatures, handFeatures, averageFeatures, compareFeatures, upgradeFe
 export { createCalibrationFlow, computeCalibration, validCalibration, missingParts };
 export { createPoseMatcher, createMovementTracker, createCaptureFlow, createMediaPipeDetector, createOneEuroFilter, createLandmarkSmoother, createVisibilityHold, createDepthEstimator, createMotionTracker };
 export { HAND_MODEL, HAND_STATE, HAND_DEFAULTS, bodyScale, createHandLandmarker, createDistanceGate };
+export { KEY_DEFAULTS, KEY_ACTIONS, parseKeys, formatKeys, parseCombo, createKeyDispatcher };
+export { BG_MODE, BG_DEFAULTS, SEGMENTER_MODEL, createSegmenter, createBackgroundRemover, maskToUint8, maskStats, silhouetteColliders, drawSilhouette };
 export { OVERLAY_DEFAULTS, DETAIL_JOINTS, angleAt, jointAngles, targetJointAngles, angleWithin, drawAngleArcs, segmentForConnection, segmentSpeeds, speedStyle, velocityStyles, drawVelocitySkeleton, drawHandSkeleton, depthIndicators, drawDepthIndicators, coincidenceFromMapped, coincidenceFromBad, drawMatchJoints, drawMatchPercent, buildDetail };
 
 function wait(ms) {
@@ -89,6 +93,11 @@ export function createPoseEngine(options) {
   let handFeaturesCache = null;
   let handLandmarksCache = null;
   let pendingTouch = false;
+  let keySeq = 0;
+  let bgInitPromise = null;
+  let lastSilhouette = null;
+  const keyDispatcher = createKeyDispatcher(Object.assign({}, o.keys, { onKey: (entry) => { keySeq += 1; emit("key", Object.assign({}, entry, { seq: keySeq })); } }));
+  const background = o.background ? createBackgroundRemover(o.background) : createBackgroundRemover({ mode: BG_MODE.SEGMENTATION, enabled: true, preprocess: "off" });
 
   function cameraOptions(extra) {
     const opts = { facingMode: facing, lens };
@@ -235,6 +244,10 @@ export function createPoseEngine(options) {
     return s.state + ":" + Math.round(s.progress * 20) + ":" + s.missing.join(",");
   }
 
+  function poseById(id) {
+    return poses.find((p) => p.id === id) || null;
+  }
+
   function process(result, t, width, height, src) {
     if (lastT !== null) {
       const dt = t - lastT;
@@ -283,9 +296,14 @@ export function createPoseEngine(options) {
     const best = handMatch.best && bodyMatch.best ? (handMatch.best.proximity >= bodyMatch.best.proximity ? handMatch.best : bodyMatch.best) : (handMatch.best || bodyMatch.best);
     const active = handMatch.active && bodyMatch.active ? handMatch.active : (handMatch.active || bodyMatch.active);
     [bodyMatch, handMatch].forEach((m) => {
-      if (m.left) emit("pose", Object.assign({ type: POSE_EVENT.LEAVE }, m.left));
+      if (m.left) {
+        emit("pose", Object.assign({ type: POSE_EVENT.LEAVE }, m.left));
+        keyDispatcher.leave(m.left.id);
+      }
       if (m.entered) {
         emit("pose", Object.assign({ type: POSE_EVENT.ENTER }, m.entered));
+        const pose = poseById(m.entered.id);
+        if (pose && parseKeys(pose.keys).length) keyDispatcher.enter(pose.id, pose.keys, pose.hold === true);
         if (!capture.active() && !calibrator.active()) tracker.enter(m.entered.id, m.entered.proximity, t).reps.forEach((r) => emit("rep", r));
       }
       if (m.active) tracker.track(m.active.id, m.active.proximity);
@@ -293,7 +311,7 @@ export function createPoseEngine(options) {
     lastFrame = {
       t, width, height, source, delegate, fps, mirrored, landmarks, worldLandmarks: world, features, handFeatures: handFeaturesCache, handLandmarks: handLandmarksCache, motion,
       tpose: isTPose(features), proximity, best, active, bodyActive: bodyMatch.active, handActive: handMatch.active, bodyBest: bodyMatch.best, handBest: handMatch.best,
-      movements: tracker.snapshot(), capture: cap.snapshot, calibration: cal.snapshot, calibrated: !!calibration, hands,
+      movements: tracker.snapshot(), capture: cap.snapshot, calibration: cal.snapshot, calibrated: !!calibration, hands, silhouette: lastSilhouette,
     };
     emit("frame", lastFrame);
     return lastFrame;
@@ -311,7 +329,13 @@ export function createPoseEngine(options) {
       let result;
       const t = performance.now();
       try {
-        result = detector.detect(video, t);
+        try { lastSilhouette = background.process(video, t, video.videoWidth, video.videoHeight) || lastSilhouette; } catch (eBg) {}
+        let detectSource = video;
+        if (background.shouldPreprocess() && lastSilhouette) {
+          const composite = background.composite(video, lastSilhouette);
+          if (composite) detectSource = composite;
+        }
+        result = detector.detect(detectSource, t);
       } catch (e) {
         const recover = detector.recover ? detector.recover() : Promise.resolve(false);
         recover.then((ok) => {
@@ -364,6 +388,10 @@ export function createPoseEngine(options) {
     handLandmarksCache = null;
     pendingTouch = false;
     settleHandState();
+    keyDispatcher.stopAll();
+    background.reset();
+    lastSilhouette = null;
+    bgInitPromise = background.init().catch(() => null);
     lastT = null;
     fps = 0;
     if (!video) throw fail(ENGINE_ERROR.NO_VIDEO);
@@ -399,6 +427,8 @@ export function createPoseEngine(options) {
     handLandmarksCache = null;
     pendingTouch = false;
     settleHandState();
+    keyDispatcher.stopAll();
+    background.reset();
     if (was && !silent) emit("status", { state: STATUS.STOPPED, source });
   }
 
@@ -503,7 +533,24 @@ export function createPoseEngine(options) {
       running, source, delegate, facingMode: facing, fps, zoom, lens, capabilities, deviceId: videoDeviceId(stream),
       poses: poses.length, movements: tracker.snapshot(), active: bodyMatcher.active() || handMatcher.active(), bodyActive: bodyMatcher.active(), handActive: handMatcher.active(), capturing: capture.active(),
       calibrating: calibrator.active(), calibration, hands: getHands(),
+      keys: keyDispatcher.pending(), heldKeys: keyDispatcher.held(), silhouette: !!lastSilhouette, backgroundMode: background.modeValue, backgroundReady: background.ready(),
     };
+  }
+
+  function getSilhouette() {
+    return lastSilhouette;
+  }
+
+  function setPlate(imageA, imageB) {
+    return background.setPlate(imageA, imageB);
+  }
+
+  function getKeyDispatcher() {
+    return keyDispatcher;
+  }
+
+  function getBackground() {
+    return background;
   }
 
   function feed(result, t, width, height) {
@@ -512,6 +559,8 @@ export function createPoseEngine(options) {
 
   function destroy() {
     stop(true);
+    keyDispatcher.destroy();
+    background.close();
     if (detector && detector.close) detector.close();
     detector = null;
     if (landmarker) landmarker.close();
@@ -532,5 +581,9 @@ export function createPoseEngine(options) {
     getHands,
     handsNear,
     lastFrame: () => lastFrame,
+    getSilhouette,
+    setPlate,
+    getKeyDispatcher,
+    getBackground,
   };
 }

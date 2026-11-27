@@ -6,7 +6,7 @@
 
 **[▶ Probar la demo](https://juliangdeveloper.github.io/pose-engine/)**
 
-<img src="assets/screenshot.jpg" alt="pantalla de pose-engine con los bloques de cuerpo y mano, el aviso para calibrar y el punto de detección de manos" width="320">
+<img src="assets/screenshot.jpg" alt="pantalla de pose-engine con los bloques de cuerpo y mano, los botones de cámara y captura, y la hoja de teclas" width="320">
 
 ## Cómo se usa
 
@@ -36,6 +36,18 @@ await engine.start({ source: 'camera' });
 ```
 
 La detección usa solo poses y secuencias ordenadas de poses: ángulos articulares y posiciones relativas al torso, invariantes a la escala y a la posición en el cuadro. La velocidad y la aceleración se calculan en cada fotograma y quedan expuestas en `frame.motion` como datos para visualización y juegos, pero nunca deciden si una pose o un movimiento se detecta. El modo detallado del visor (arcos de ángulo, grosor por velocidad, profundidad y coincidencia) se dibuja con los helpers de `engine/v2/overlay.js`, exportados desde `index.js`, para reutilizarlos en otros proyectos.
+
+## Teclas
+
+Cada pose puede llevar teclas propias (por ejemplo jab con j, k): se editan en Poses › pose › Teclas y se guardan en la biblioteca con exportar/importar. Las teclas salen al ENTRAR a la pose, no al salir. Con «Mantener tecla» activado, la tecla se repite como si fuera física apretada mientras la pose sigue activa, hasta soltar la pose. La hoja de teclas del panel muestra cada repetición. En combos rápidos cada detección termina su secuencia completa antes de ceder: la cola del motor nunca corta una secuencia a mitad aunque entre otra pose (jab con j, k seguido de cross con x, y emite j, k, x, y). En el motor: evento `key` en `engine.on('key', ...)` con `poseId`, `key`, `index`, `total` y `hold`, más `engine.getKeyDispatcher()` con `pending()` y `held()`.
+
+## Silueta y colliders
+
+La sombra es una silueta del jugador de tamaño fijo, sin cambios de color ni de escala: sale de la máscara de fondo removido, no del esqueleto, y el esqueleto sigue dibujado encima para apps que necesitan velocidades. La silueta queda en `frame.silhouette` (`width`, `height`, `data` como máscara 0–255, `bbox`, `area`, `colliders` y `at`) y en `engine.getSilhouette()` para generar colliders dinámicos sin extraerlos de articulaciones. Los helpers `maskStats`, `silhouetteColliders` y `drawSilhouette` se exportan desde `engine/v2/index.js`.
+
+## Fondo
+
+El motor mide tres métodos (máscara de segmentación de MediaPipe, placa limpia con dos fotos laterales, sin quitar fondo) y no activa ningún preprocesado de detección por defecto: la detección corre siempre sobre el fotograma original. La segmentación se usa solo para la silueta en baja resolución y ritmo reducido. La placa limpia se configura con `engine.setPlate(a, b)` o `createBackgroundRemover({ mode: "plate" })`; el preprocesado experimental con `background.preprocess: "mask"` queda apagado.
 
 ## Poses de mano
 

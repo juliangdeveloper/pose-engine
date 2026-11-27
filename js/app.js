@@ -1,8 +1,8 @@
-import { createPoseEngine, SOURCE, STATUS, FACING, LENS, CAPTURE_STATE, CAPTURE_RESULT, CALIBRATION_RESULT, PREVIEW_JOINTS, HAND_PREVIEW_COUNT, HAND_BONES, POSE_EVENT, gradeFor, normalizeSequence, validCalibration } from "../engine/v2/index.js?v=0.10.4";
-import { createPoseOverlay } from "../engine/v2/overlay-ui.js?v=0.10.4";
-import { mountCapture } from "../engine/v2/capture-ui.js?v=0.10.4";
-import { mountLibrary } from "../engine/v2/library-ui.js?v=0.10.4";
-import { mountHands } from "../engine/v2/hands-ui.js?v=0.10.4";
+import { createPoseEngine, SOURCE, STATUS, FACING, LENS, CAPTURE_STATE, CAPTURE_RESULT, CALIBRATION_RESULT, PREVIEW_JOINTS, HAND_PREVIEW_COUNT, HAND_BONES, POSE_EVENT, gradeFor, normalizeSequence, validCalibration } from "../engine/v2/index.js?v=0.11.0";
+import { createPoseOverlay } from "../engine/v2/overlay-ui.js?v=0.11.0";
+import { mountCapture } from "../engine/v2/capture-ui.js?v=0.11.0";
+import { mountLibrary } from "../engine/v2/library-ui.js?v=0.11.0";
+import { mountHands } from "../engine/v2/hands-ui.js?v=0.11.0";
 import {
   APP_ID, APP_VERSION, CAMERA_KEY, LENS_KEY, CALIBRATION_KEY, DETAIL_KEY, DETAIL_ON, DETAIL_OFF, CALIBRATION_MAX, STATS_KEY, STAT, STATS, MAX_DPR, PERCENT, COLOR, TEXT,
   NAME_MAX, DESCRIPTION_MAX,
@@ -34,6 +34,7 @@ const ui = {
   flip: $("btn-flip"), zoom: $("btn-zoom"), zoomLabel: $("zoom-label"), reset: $("btn-reset"), popGrade: $("pop-grade"),
   posesBtn: $("btn-poses"), movesBtn: $("btn-moves"), posesCount: $("poses-count"), movesCount: $("moves-count"),
   calibrate: $("btn-calibrate"),
+  keySheet: $("key-sheet"),
   stageHud: $("stage-hud"), stageReps: $("stage-reps-value"), stageRepsLabel: $("stage-reps-label"), stageTrack: $("stage-track-fill"),
   stageAlert: $("stage-alert"), stageFlash: $("stage-flash"), detail: $("btn-detail"),
 };
@@ -110,7 +111,7 @@ const overlay = createPoseOverlay({
   getTargetPoseId: ghostTarget,
   isCalibrating: () => engine.calibrating(),
   isDetail: () => detailOn,
-  style: "silhouette",
+  style: "shadow",
 });
 
 const captureUI = mountCapture(stage, {
@@ -772,6 +773,11 @@ engine.on("calibration", (c) => {
 
 engine.on("pose", (p) => {
   if (p.type === POSE_EVENT.ENTER) restart(ui.poseName, "flash");
+});
+
+engine.on("key", (k) => {
+  if (!ui.keySheet) return;
+  ui.keySheet.value = (ui.keySheet.value + k.key).slice(-120);
 });
 
 engine.on("hands-state", (s) => {

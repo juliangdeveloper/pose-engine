@@ -16,8 +16,8 @@
   <title>Pose Engine</title>
   <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="assets/icon-180.png">
-  <link rel="manifest" href="manifest.json?v=0.10.4">
-  <link rel="stylesheet" href="css/styles.css?v=0.10.4">
+  <link rel="manifest" href="manifest.json?v=0.11.0">
+  <link rel="stylesheet" href="css/styles.css?v=0.11.0">
 </head>
 <body>
   <header class="bar">
@@ -124,6 +124,10 @@
           <span>Movimientos</span><span class="badge" id="moves-count">0</span>
         </button>
       </nav>
+      <label class="key-sheet">
+        <span class="key-sheet-label" id="key-sheet-label">Teclas</span>
+        <input class="key-sheet-input" id="key-sheet" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Teclas">
+      </label>
     </aside>
   </div>
 
@@ -152,6 +156,6 @@
     </form>
   </dialog>
 
-  <script type="module" src="js/app.js?v=0.10.4"></script>
+  <script type="module" src="js/app.js?v=0.11.0"></script>
 </body>
 </html>
