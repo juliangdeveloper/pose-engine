@@ -1,8 +1,8 @@
-import { createPoseEngine, SOURCE, STATUS, FACING, LENS, CAPTURE_STATE, CAPTURE_RESULT, CALIBRATION_RESULT, PREVIEW_JOINTS, HAND_PREVIEW_COUNT, HAND_BONES, POSE_EVENT, gradeFor, normalizeSequence, validCalibration } from "../engine/v2/index.js?v=0.10.3";
-import { createPoseOverlay } from "../engine/v2/overlay-ui.js?v=0.10.3";
-import { mountCapture } from "../engine/v2/capture-ui.js?v=0.10.3";
-import { mountLibrary } from "../engine/v2/library-ui.js?v=0.10.3";
-import { mountHands } from "../engine/v2/hands-ui.js?v=0.10.3";
+import { createPoseEngine, SOURCE, STATUS, FACING, LENS, CAPTURE_STATE, CAPTURE_RESULT, CALIBRATION_RESULT, PREVIEW_JOINTS, HAND_PREVIEW_COUNT, HAND_BONES, POSE_EVENT, gradeFor, normalizeSequence, validCalibration } from "../engine/v2/index.js?v=0.10.4";
+import { createPoseOverlay } from "../engine/v2/overlay-ui.js?v=0.10.4";
+import { mountCapture } from "../engine/v2/capture-ui.js?v=0.10.4";
+import { mountLibrary } from "../engine/v2/library-ui.js?v=0.10.4";
+import { mountHands } from "../engine/v2/hands-ui.js?v=0.10.4";
 import {
   APP_ID, APP_VERSION, CAMERA_KEY, LENS_KEY, CALIBRATION_KEY, DETAIL_KEY, DETAIL_ON, DETAIL_OFF, CALIBRATION_MAX, STATS_KEY, STAT, STATS, MAX_DPR, PERCENT, COLOR, TEXT,
   NAME_MAX, DESCRIPTION_MAX,

@@ -6,7 +6,7 @@
 
 **[▶ Probar la demo](https://juliangdeveloper.github.io/pose-engine/)**
 
-<img src="assets/screenshot.jpg" alt="pantalla de pose-engine con el esqueleto en vivo y el punto de detección de manos encendido junto al botón de detalle" width="320">
+<img src="assets/screenshot.jpg" alt="pantalla de pose-engine con los bloques de cuerpo y mano, el aviso para calibrar y el punto de detección de manos" width="320">
 
 ## Cómo se usa
 
