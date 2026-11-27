@@ -287,11 +287,16 @@ export function createPoseOverlay(options) {
       const p = lm[LANDMARK[n]];
       return p && visibilityOf(p) >= MIN_JOINT_VISIBILITY;
     });
-    const low = ["left_hip", "right_hip"].some((n) => {
+    const hips = ["left_hip", "right_hip"].some((n) => {
       const p = lm[LANDMARK[n]];
-      return p && visibilityOf(p) >= MIN_JOINT_VISIBILITY;
+      return p && visibilityOf(p) >= MIN_JOINT_VISIBILITY && pointInFrame(p);
     });
-    if (up && !low) return "";
+    const feet = ["left_ankle", "right_ankle", "left_heel", "right_heel"].every((n) => {
+      const p = lm[LANDMARK[n]];
+      return p && visibilityOf(p) >= MIN_JOINT_VISIBILITY && pointInFrame(p);
+    });
+    if (up && !hips) return texts.outFrame;
+    if (up && hips && !feet) return texts.outFrame;
     const h = bodyHeight(lm);
     if (!h) return texts.outFrame;
     if (h > FRAME_MAX_HEIGHT) return texts.tooFar;
@@ -403,7 +408,7 @@ export function createPoseOverlay(options) {
   function drawShadow(frame, box) {
     const silhouette = frame && frame.silhouette;
     if (!silhouette || !silhouette.data) return;
-    drawSilhouette(ctx, silhouette, box, {});
+    drawSilhouette(ctx, silhouette, box, { mirrored: frame.mirrored });
   }
 
   function drawGuideLine(frame, box, mirrored) {

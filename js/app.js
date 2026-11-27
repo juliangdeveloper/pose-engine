@@ -1,8 +1,8 @@
-import { createPoseEngine, SOURCE, STATUS, FACING, LENS, CAPTURE_STATE, CAPTURE_RESULT, CALIBRATION_RESULT, PREVIEW_JOINTS, HAND_PREVIEW_COUNT, HAND_BONES, POSE_EVENT, gradeFor, normalizeSequence, validCalibration } from "../engine/v2/index.js?v=0.11.0";
-import { createPoseOverlay } from "../engine/v2/overlay-ui.js?v=0.11.0";
-import { mountCapture } from "../engine/v2/capture-ui.js?v=0.11.0";
-import { mountLibrary } from "../engine/v2/library-ui.js?v=0.11.0";
-import { mountHands } from "../engine/v2/hands-ui.js?v=0.11.0";
+import { createPoseEngine, SOURCE, STATUS, FACING, LENS, CAPTURE_STATE, CAPTURE_RESULT, CALIBRATION_RESULT, PREVIEW_JOINTS, HAND_PREVIEW_COUNT, HAND_BONES, POSE_EVENT, gradeFor, normalizeSequence, validCalibration } from "../engine/v2/index.js?v=0.12.0";
+import { createPoseOverlay } from "../engine/v2/overlay-ui.js?v=0.12.0";
+import { mountCapture } from "../engine/v2/capture-ui.js?v=0.12.0";
+import { mountLibrary } from "../engine/v2/library-ui.js?v=0.12.0";
+import { mountHands } from "../engine/v2/hands-ui.js?v=0.12.0";
 import {
   APP_ID, APP_VERSION, CAMERA_KEY, LENS_KEY, CALIBRATION_KEY, DETAIL_KEY, DETAIL_ON, DETAIL_OFF, CALIBRATION_MAX, STATS_KEY, STAT, STATS, MAX_DPR, PERCENT, COLOR, TEXT,
   NAME_MAX, DESCRIPTION_MAX,
@@ -34,7 +34,6 @@ const ui = {
   flip: $("btn-flip"), zoom: $("btn-zoom"), zoomLabel: $("zoom-label"), reset: $("btn-reset"), popGrade: $("pop-grade"),
   posesBtn: $("btn-poses"), movesBtn: $("btn-moves"), posesCount: $("poses-count"), movesCount: $("moves-count"),
   calibrate: $("btn-calibrate"),
-  keySheet: $("key-sheet"),
   stageHud: $("stage-hud"), stageReps: $("stage-reps-value"), stageRepsLabel: $("stage-reps-label"), stageTrack: $("stage-track-fill"),
   stageAlert: $("stage-alert"), stageFlash: $("stage-flash"), detail: $("btn-detail"),
 };
@@ -76,6 +75,7 @@ let calibrationNote = null;
 let pendingCapture = false;
 let popTimer = 0;
 let flashTimer = 0;
+let modelRaf = 0;
 const prevSteps = {};
 const prevCounts = {};
 
@@ -146,10 +146,13 @@ const libraryUI = mountLibrary(document.body, {
   },
   onReset: () => {
     focusId = null;
-    if (sideMoveId && !library.movements.some((m) => m.id === sideMoveId)) sideMoveId = null;
-    renderSideList();
   },
   onChange: () => {},
+  onSelectMove: (id) => {
+    focusId = id;
+    renderHud(lastFrame);
+  },
+  onMovesModel: (on) => setMovesModel(on),
   data: { exportLibrary, parseImport, mergeLibrary, newId, nextName, playable, resetLibrary },
   drawThumb: (el, pts, size) => drawThumb(el, pts, size),
   normalizeSequence: (seq) => normalizeSequence(seq),
@@ -533,20 +536,21 @@ const SIDE_HOLD_MS = 650;
 const SIDE_TWEEN_MS = 450;
 const MODEL_BONE_PX = 5;
 const MODEL_JOINT_PX = 3.4;
-const sideEl = $("side");
-const sideBackdrop = $("side-backdrop");
-const sideList = $("side-list");
-const sideCanvas = $("side-canvas");
-let sideMoveId = null;
-let sideRaf = 0;
+function modelCanvas() {
+  return $("moves-model");
+}
 
 function sizeModelCanvas() {
+  const c = modelCanvas();
+  if (!c || !c.clientWidth) return;
   const dpr = Math.min(window.devicePixelRatio || 1, MAX_DPR);
-  sideCanvas.width = Math.round(sideCanvas.clientWidth * dpr);
-  sideCanvas.height = Math.round(sideCanvas.clientHeight * dpr);
+  c.width = Math.round(c.clientWidth * dpr);
+  c.height = Math.round(c.clientHeight * dpr);
 }
 
 function drawModel(pts) {
+  const sideCanvas = modelCanvas();
+  if (!sideCanvas) return;
   const c = sideCanvas.getContext("2d");
   const dpr = Math.min(window.devicePixelRatio || 1, MAX_DPR);
   const w = sideCanvas.clientWidth;
@@ -615,10 +619,22 @@ function sidePtsAt(move, now) {
   return modelLerp(a.pts, b.pts, tt <= SIDE_HOLD_MS ? 0 : modelEase((tt - SIDE_HOLD_MS) / SIDE_TWEEN_MS));
 }
 
-function sideTick() {
-  const move = sideMoveId ? library.movements.find((m) => m.id === sideMoveId) : null;
-  drawModel(move ? sidePtsAt(move, performance.now()) : null);
-  sideRaf = requestAnimationFrame(sideTick);
+function movesTick() {
+  const c = modelCanvas();
+  if (c) {
+    sizeModelCanvas();
+    const move = focusId ? library.movements.find((m) => m.id === focusId) : library.movements[0] || null;
+    drawModel(move ? sidePtsAt(move, performance.now()) : null);
+  }
+  modelRaf = requestAnimationFrame(movesTick);
+}
+
+function setMovesModel(on) {
+  if (on && !modelRaf) modelRaf = requestAnimationFrame(movesTick);
+  if (!on && modelRaf) {
+    cancelAnimationFrame(modelRaf);
+    modelRaf = 0;
+  }
 }
 
 function el(tag, cls, text) {
@@ -633,48 +649,6 @@ function button(cls, text, onClick) {
   b.type = "button";
   b.addEventListener("click", onClick);
   return b;
-}
-
-function renderSideList() {
-  if (!library.movements.length) {
-    sideList.replaceChildren(el("li", "side-empty", TEXT.menuEmpty));
-    return;
-  }
-  sideList.replaceChildren(...library.movements.map((m) => {
-    const li = el("li");
-    const b = button("side-item", undefined, () => selectSide(m.id));
-    b.setAttribute("aria-pressed", String(m.id === sideMoveId));
-    const body = el("span", "item-body");
-    body.append(el("span", "item-name", m.name), el("span", "side-item-sub", m.sequence.map(poseName).filter(Boolean).join(" → ")));
-    b.append(body);
-    li.append(b);
-    return li;
-  }));
-}
-
-function selectSide(id) {
-  sideMoveId = id;
-  focusId = id;
-  renderSideList();
-  renderHud(lastFrame);
-}
-
-function openSide() {
-  if (!library.movements.some((m) => m.id === sideMoveId)) sideMoveId = library.movements.length ? library.movements[0].id : null;
-  sideEl.classList.add("open");
-  sideBackdrop.hidden = false;
-  renderSideList();
-  sizeModelCanvas();
-  if (!sideRaf) sideRaf = requestAnimationFrame(sideTick);
-}
-
-function closeSide() {
-  sideEl.classList.remove("open");
-  sideBackdrop.hidden = true;
-  if (sideRaf) {
-    cancelAnimationFrame(sideRaf);
-    sideRaf = 0;
-  }
 }
 
 function setRunning(on, src) {
@@ -773,11 +747,6 @@ engine.on("calibration", (c) => {
 
 engine.on("pose", (p) => {
   if (p.type === POSE_EVENT.ENTER) restart(ui.poseName, "flash");
-});
-
-engine.on("key", (k) => {
-  if (!ui.keySheet) return;
-  ui.keySheet.value = (ui.keySheet.value + k.key).slice(-120);
 });
 
 engine.on("hands-state", (s) => {
@@ -904,16 +873,6 @@ ui.reset.addEventListener("click", () => {
   Object.keys(prevSteps).forEach((k) => { delete prevSteps[k]; });
   Object.keys(prevCounts).forEach((k) => { delete prevCounts[k]; });
   renderHud(lastFrame);
-});
-
-$("btn-menu").addEventListener("click", () => {
-  if (sideEl.classList.contains("open")) closeSide();
-  else openSide();
-});
-sideBackdrop.addEventListener("click", closeSide);
-$("side-close").addEventListener("click", closeSide);
-document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape" && sideEl.classList.contains("open")) closeSide();
 });
 
 ui.posesBtn.addEventListener("click", () => libraryUI.open("poses"));

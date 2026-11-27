@@ -119,10 +119,13 @@ export function mountCapture(host, options) {
     }
     const c = calibration.snapshot || { state: "waiting", progress: 0, missing: [] };
     const holding = c.state === "holding";
+    const missing = c.missing && c.missing.length ? c.missing : [];
     banner.dataset.state = holding ? "holding" : "waiting";
     bannerHold.style.transform = "scaleX(" + (holding ? c.progress : 0).toFixed(3) + ")";
     bannerTitle.textContent = holding ? texts.calHold : texts.calWait;
-    bannerHint.textContent = c.missing && c.missing.length ? texts.missing(c.missing) : holding ? texts.calHoldHint : texts.calWaitHint;
+    if (missing.length) bannerHint.textContent = texts.missing(missing);
+    else if (holding) bannerHint.textContent = Math.round((c.progress || 0) * 100) + "%" + (texts.calHoldHint ? " · " + texts.calHoldHint : "");
+    else bannerHint.textContent = texts.calWaitHint || "";
     return true;
   }
 

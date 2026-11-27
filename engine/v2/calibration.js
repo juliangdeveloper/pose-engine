@@ -140,6 +140,11 @@ export function createCalibrationFlow(options) {
     if (state === CALIBRATION_STATE.HOLDING) {
       samples.push({ landmarks, world });
       if (t - heldSince >= o.holdMs) {
+        if (missing.length) {
+          state = CALIBRATION_STATE.WAITING;
+          samples = [];
+          anchor = null;
+        } else {
         const calibration = computeCalibration(samples, o);
         if (calibration) {
           result = { type: CALIBRATION_RESULT.CALIBRATED, calibration };
@@ -149,6 +154,7 @@ export function createCalibrationFlow(options) {
         } else {
           state = CALIBRATION_STATE.WAITING;
           samples = [];
+        }
         }
       }
     }

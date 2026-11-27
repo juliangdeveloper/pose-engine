@@ -9,13 +9,13 @@ import { createCalibrationFlow, computeCalibration, validCalibration, missingPar
 import { createMediaPipeDetector, DELEGATE, MODEL, TASKS_VISION_VERSION } from "./detector.js";
 import { createDepthEstimator, DEPTH_DEFAULTS } from "./depth.js";
 import { createMotionTracker } from "./motion.js";
-import { createHandLandmarker, createDistanceGate, bodyScale, HAND_MODEL, HAND_STATE, HAND_DEFAULTS } from "./hands.js";
+import { createHandLandmarker, createDistanceGate, bodyScale, wristCrop, remapHandLandmarks, HAND_MODEL, HAND_STATE, HAND_DEFAULTS } from "./hands.js";
 import { openCamera, closeCamera, retuneLens, readCameraState, emptyCameraState, FACING, LENS, CAMERA_ERROR, CameraError, CAMERA_RELEASE_MS } from "./camera.js";
 import { OVERLAY_DEFAULTS, DETAIL_JOINTS, angleAt, jointAngles, targetJointAngles, angleWithin, drawAngleArcs, segmentForConnection, segmentSpeeds, speedStyle, velocityStyles, drawVelocitySkeleton, drawHandSkeleton, depthIndicators, drawDepthIndicators, coincidenceFromMapped, coincidenceFromBad, drawMatchJoints, drawMatchPercent, buildDetail } from "./overlay.js";
 import { createKeyDispatcher, parseKeys, formatKeys, parseCombo, KEY_DEFAULTS, KEY_ACTIONS } from "./keys.js";
 import { createBackgroundRemover, createSegmenter, maskToUint8, maskStats, silhouetteColliders, drawSilhouette, BG_MODE, BG_DEFAULTS, SEGMENTER_MODEL } from "./background.js";
 
-export const ENGINE_VERSION = "0.11.0";
+export const ENGINE_VERSION = "0.12.0";
 export const SOURCE = Object.freeze({ CAMERA: "camera", VIDEO: "video" });
 export const STATUS = Object.freeze({ LOADING_MODEL: "loading-model", OPENING_CAMERA: "opening-camera", RUNNING: "running", STOPPED: "stopped" });
 export const ENGINE_ERROR = Object.freeze(Object.assign({ MODEL_FAILED: "model-failed", DETECT_FAILED: "detect-failed", NO_VIDEO: "no-video" }, CAMERA_ERROR));
@@ -31,7 +31,7 @@ export { CALIBRATION_STATE, CALIBRATION_RESULT, CALIBRATION_DEFAULTS, CALIBRATIO
 export { poseFeatures, handFeatures, averageFeatures, compareFeatures, upgradeFeatures, isTPose, isHandFeature, bodyFrame, gradeFor, normalizeSequence };
 export { createCalibrationFlow, computeCalibration, validCalibration, missingParts };
 export { createPoseMatcher, createMovementTracker, createCaptureFlow, createMediaPipeDetector, createOneEuroFilter, createLandmarkSmoother, createVisibilityHold, createDepthEstimator, createMotionTracker };
-export { HAND_MODEL, HAND_STATE, HAND_DEFAULTS, bodyScale, createHandLandmarker, createDistanceGate };
+export { HAND_MODEL, HAND_STATE, HAND_DEFAULTS, bodyScale, wristCrop, remapHandLandmarks, createHandLandmarker, createDistanceGate };
 export { KEY_DEFAULTS, KEY_ACTIONS, parseKeys, formatKeys, parseCombo, createKeyDispatcher };
 export { BG_MODE, BG_DEFAULTS, SEGMENTER_MODEL, createSegmenter, createBackgroundRemover, maskToUint8, maskStats, silhouetteColliders, drawSilhouette };
 export { OVERLAY_DEFAULTS, DETAIL_JOINTS, angleAt, jointAngles, targetJointAngles, angleWithin, drawAngleArcs, segmentForConnection, segmentSpeeds, speedStyle, velocityStyles, drawVelocitySkeleton, drawHandSkeleton, depthIndicators, drawDepthIndicators, coincidenceFromMapped, coincidenceFromBad, drawMatchJoints, drawMatchPercent, buildDetail };
@@ -190,10 +190,12 @@ export function createPoseEngine(options) {
     });
   }
 
-  function detectHand(src, t) {
+  function detectHand(src, t, landmarks, width, height) {
     let r = null;
     try {
-      r = landmarker.detect(src, t);
+      const crop = landmarks && width && height && src ? wristCrop(landmarks, width, height, handOptions.minVisibility, handOptions) : null;
+      r = landmarker.detect(src, t, crop);
+      if ((!r || !r.landmarks) && crop) r = landmarker.detect(src, t, null);
     } catch (e) {
       handBusy = true;
       const current = landmarker;
@@ -221,7 +223,7 @@ export function createPoseEngine(options) {
       settleHandState();
       if ((near || capturingHand) && src && handReady && !handBusy) {
         handTick = (handTick + 1) % Math.max(1, handOptions.everyFrames);
-        if (handTick === 0) detectHand(src, t);
+        if (handTick === 0) detectHand(src, t, landmarks, width, height);
       }
     } else {
       gate.reset();
@@ -279,6 +281,7 @@ export function createPoseEngine(options) {
       emit("calibration", Object.assign({}, cal.snapshot, { result: cal.result ? cal.result.type : null, calibration: cal.result ? cal.result.calibration : null }));
     }
     const hands = stepHands(src, t, landmarks, width, height);
+    if (lastSilhouette) lastSilhouette.mirrored = mirrored;
     const capKind = capture.kind();
     let touched = pendingTouch;
     if (capKind === CAPTURE_KIND.HAND && !handReady) touched = false;

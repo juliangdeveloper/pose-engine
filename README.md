@@ -6,7 +6,7 @@
 
 **[▶ Probar la demo](https://juliangdeveloper.github.io/pose-engine/)**
 
-<img src="assets/screenshot.jpg" alt="pantalla de pose-engine con los bloques de cuerpo y mano, los botones de cámara y captura, y la hoja de teclas" width="320">
+<img src="assets/screenshot.jpg" alt="pantalla de pose-engine con los bloques de cuerpo y mano y los botones de cámara y captura" width="320">
 
 ## Cómo se usa
 
@@ -39,7 +39,7 @@ La detección usa solo poses y secuencias ordenadas de poses: ángulos articular
 
 ## Teclas
 
-Cada pose puede llevar teclas propias (por ejemplo jab con j, k): se editan en Poses › pose › Teclas y se guardan en la biblioteca con exportar/importar. Las teclas salen al ENTRAR a la pose, no al salir. Con «Mantener tecla» activado, la tecla se repite como si fuera física apretada mientras la pose sigue activa, hasta soltar la pose. La hoja de teclas del panel muestra cada repetición. En combos rápidos cada detección termina su secuencia completa antes de ceder: la cola del motor nunca corta una secuencia a mitad aunque entre otra pose (jab con j, k seguido de cross con x, y emite j, k, x, y). En el motor: evento `key` en `engine.on('key', ...)` con `poseId`, `key`, `index`, `total` y `hold`, más `engine.getKeyDispatcher()` con `pending()` y `held()`.
+Cada pose puede llevar teclas propias (por ejemplo jab con j, k): se editan en Poses › pose › Teclas y se guardan en la biblioteca con exportar/importar. Las teclas salen al ENTRAR a la pose, no al salir. Con «Mantener tecla» activado, la tecla se repite como si fuera física apretada mientras la pose sigue activa, hasta soltar la pose. En combos rápidos cada detección termina su secuencia completa antes de ceder: la cola del motor nunca corta una secuencia a mitad aunque entre otra pose (jab con j, k seguido de cross con x, y emite j, k, x, y). En el motor: evento `key` en `engine.on('key', ...)` con `poseId`, `key`, `index`, `total` y `hold`, más `engine.getKeyDispatcher()` con `pending()` y `held()`.
 
 ## Silueta y colliders
 
@@ -55,7 +55,7 @@ Las manos usan el mismo pipeline que el cuerpo: landmarks de la mano convertidos
 
 El HUD muestra dos bloques iguales, uno para el cuerpo y otro para la mano (etiqueta, nombre, porcentaje y barra). El de la mano aparece siempre: sin mano muestra "Sin mano", con mano detectada aunque no coincida con ninguna pose muestra "Mano detectada" y con coincidencia muestra el nombre y el porcentaje. La etiqueta indica si está activa (verde cuerpo, naranja mano), detectada sin coincidir (borde amarillo) o cerca de una pose.
 
-El modelo de manos (`HandLandmarker` de `tasks-vision` 1.2.2, misma CDN que la pose) se descarga solo cuando hay al menos una pose de mano o al iniciar una captura de mano. La compuerta por distancia se mantiene: ancho de hombros dividido por el lado menor del cuadro. Cerca (0,24 o más) la detección de manos está activa; lejos (0,18 o menos) está inactiva; entre ambos valores conserva el estado y cada cambio espera 0,5 s. El estado queda en `frame.hands` (`off`, `loading`, `far`, `near` o `failed`, y si hay mano activa). La captura se dispara con `engine.startHandCapture()` y `engine.touch()`.
+El modelo de manos (`HandLandmarker` de `tasks-vision` 1.2.2, misma CDN que la pose, hasta dos manos) se descarga solo cuando hay al menos una pose de mano o al iniciar una captura de mano. La detección corre sobre un recorte ampliado alrededor de las muñecas (con respaldo al cuadro completo) y con umbrales bajos (0,3 en detección, presencia y seguimiento), así que funciona cerca, a media distancia y lejos. La compuerta por distancia se mantiene: ancho de hombros dividido por el lado menor del cuadro. Cerca (0,12 o más) la detección de manos está activa; lejos (0,08 o menos) está inactiva; entre ambos valores conserva el estado y cada cambio espera 0,3 s. El estado queda en `frame.hands` (`off`, `loading`, `far`, `near` o `failed`, y si hay mano activa). La captura se dispara con `engine.startHandCapture()` y `engine.touch()`.
 
 ## Módulos de interfaz reutilizables
 

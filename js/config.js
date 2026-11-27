@@ -1,5 +1,5 @@
 export const APP_ID = "pose-engine";
-export const APP_VERSION = "0.11.0";
+export const APP_VERSION = "0.12.0";
 export const STATS_KEY = "pose-engine.stats";
 export const CAMERA_KEY = "pose-engine.camera";
 export const LENS_KEY = "pose-engine.lens";
@@ -124,21 +124,19 @@ export const TEXT = Object.freeze({
   calibrateSkip: "Omitir",
   detail: "Detalle",
   calWait: "Haz la pose T",
-  calWaitHint: "",
-  calHold: "Quieto…",
-  calHoldHint: "",
+  calWaitHint: "Brazos rectos a la altura de los hombros, cuerpo completo en el cuadro",
+  calHold: "Quédate quieto",
+  calHoldHint: "sin moverte",
   calDone: "Calibrado",
   calPartial: "Se comparan solo las partes que se ven",
   missing: (parts) => {
-    const word = { leftArm: "tu brazo izquierdo", rightArm: "tu brazo derecho", leftLeg: "tu pierna izquierda", rightLeg: "tu pierna derecha" };
     const has = (p) => parts.indexOf(p) !== -1;
-    const list = [];
-    if (has("leftArm") && has("rightArm")) list.push("tus brazos");
-    else ["leftArm", "rightArm"].forEach((p) => { if (has(p)) list.push(word[p]); });
-    if (has("leftLeg") && has("rightLeg")) list.push("tus piernas");
-    else ["leftLeg", "rightLeg"].forEach((p) => { if (has(p)) list.push(word[p]); });
-    const plural = list.length > 1 || /^tus /.test(list[0] || "");
-    return (plural ? "No se ven " : "No se ve ") + list.join(" ni ");
+    const arms = has("leftArm") || has("rightArm");
+    const legs = has("leftLeg") || has("rightLeg");
+    if (arms && legs) return "Muestra las manos y las piernas";
+    if (arms) return "Muestra las manos";
+    if (legs) return "Muestra las piernas";
+    return "Muestra el cuerpo completo";
   },
   holdT: "Mantén la pose T",
   countdown: "Ponte en la pose",
@@ -173,7 +171,6 @@ export const TEXT = Object.freeze({
   keysHint: "Letras separadas por coma, por ejemplo j, k. Salen al entrar a la pose.",
   hold: "Mantener tecla",
   holdHint: "La tecla se repite mientras la pose sigue activa.",
-  keySheet: "Teclas",
   sequence: "Secuencia",
   sequenceHint: "Toca una pose para agregarla al final.",
   sequenceEmpty: "Agrega al menos dos poses.",
@@ -185,7 +182,6 @@ export const TEXT = Object.freeze({
   noDescription: "Sin descripción",
   removeStep: "Quitar",
   menu: "Movimientos",
-  menuEmpty: "Aún no hay movimientos que mostrar.",
   tooFar: "Aléjate un paso",
   tooNear: "Acércate",
   outFrame: "Entra en el cuadro",

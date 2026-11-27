@@ -221,7 +221,7 @@ export function mountLibrary(host, options) {
 
   function renderMovesList() {
     const lib = o.getLibrary();
-    const out = [];
+    const out = lib.movements.length ? [moveModel()] : [];
     if (!lib.movements.length) out.push(el("p", "empty", texts.emptyMoves));
     else {
       const list = el("ul", "items");
@@ -381,6 +381,16 @@ export function mountLibrary(host, options) {
     else nodes = renderImport(importBack);
     libMain.replaceChildren(...nodes);
     libMain.scrollTop = 0;
+    if (typeof o.onMovesModel === "function") o.onMovesModel(view === VIEW.MOVES);
+  }
+
+  function moveModel() {
+    const wrap = el("div", "move-model");
+    const canvas = el("canvas", "move-model-canvas");
+    canvas.id = "moves-model";
+    canvas.setAttribute("aria-hidden", "true");
+    wrap.append(canvas);
+    return wrap;
   }
 
   function openPose(id) {
@@ -390,6 +400,7 @@ export function mountLibrary(host, options) {
 
   function openMove(id) {
     editing = id;
+    if (id && typeof o.onSelectMove === "function") o.onSelectMove(id);
     show(VIEW.MOVE);
   }
 
@@ -424,6 +435,7 @@ export function mountLibrary(host, options) {
   }
 
   dialog.addEventListener("click", (e) => { if (e.target === dialog) dialog.close(); });
+  dialog.addEventListener("close", () => { if (typeof o.onMovesModel === "function") o.onMovesModel(false); });
 
   const resetMount = mountReset(document.body, {
     button: resetBtn,

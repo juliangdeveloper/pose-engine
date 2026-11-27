@@ -203,6 +203,7 @@ export function silhouetteColliders(silhouette, options) {
 
 export function drawSilhouette(ctx, silhouette, box, options) {
   const o = Object.assign({ r: 8, g: 10, b: 14, a: ALPHA_FOREGROUND }, options || {});
+  const mirrored = !!(o.mirrored || (silhouette && silhouette.mirrored));
   if (!ctx || !silhouette || !silhouette.data || !box || !(box.w > 0) || !(box.h > 0)) return;
   const w = silhouette.width;
   const h = silhouette.height;
@@ -217,12 +218,16 @@ export function drawSilhouette(ctx, silhouette, box, options) {
   const image = c.createImageData(w, h);
   const d = image.data;
   const threshold = typeof o.threshold === "number" ? o.threshold : BG_DEFAULTS.threshold;
-  for (let i = 0; i < w * h; i++) {
-    if (data[i] >= threshold) {
-      d[i * QUARTER] = o.r;
-      d[i * QUARTER + 1] = o.g;
-      d[i * QUARTER + 2] = o.b;
-      d[i * QUARTER + 3] = o.a;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const src = mirrored ? y * w + (w - 1 - x) : y * w + x;
+      const dst = y * w + x;
+      if (data[src] >= threshold) {
+        d[dst * QUARTER] = o.r;
+        d[dst * QUARTER + 1] = o.g;
+        d[dst * QUARTER + 2] = o.b;
+        d[dst * QUARTER + 3] = o.a;
+      }
     }
   }
   c.putImageData(image, 0, 0);
