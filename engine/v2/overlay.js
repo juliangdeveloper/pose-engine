@@ -1,5 +1,5 @@
 import { LANDMARK } from "./landmarks.js";
-import { PREVIEW_JOINTS, LIMB_SEGMENTS, SEGMENT } from "./features.js";
+import { PREVIEW_JOINTS, LIMB_SEGMENTS, SEGMENT, HAND_BONES } from "./features.js";
 
 const RAD_TO_DEG = 180 / Math.PI;
 const EPS = 1e-6;
@@ -265,6 +265,40 @@ export function drawVelocitySkeleton(ctx, landmarks, connections, motion, px, op
     ctx.globalAlpha = o.fadeOf ? o.fadeOf(p) : 1;
     ctx.beginPath();
     ctx.arc(P.x, P.y, o.jointRadiusPx, ZERO3, TAU);
+    ctx.fill();
+  });
+  ctx.restore();
+}
+
+export function drawHandSkeleton(ctx, landmarks, px, options) {
+  const o = Object.assign({}, OVERLAY_DEFAULTS, options);
+  if (!ctx || !landmarks || !px) return;
+  ctx.save();
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  HAND_BONES.forEach(([a, b]) => {
+    const pa = landmarks[a];
+    const pb = landmarks[b];
+    if (!finitePoint(pa) || !finitePoint(pb)) return;
+    const A = px(pa);
+    const B = px(pb);
+    if (!finitePoint(A) || !finitePoint(B)) return;
+    ctx.globalAlpha = o.fadeOf ? Math.min(o.fadeOf(pa), o.fadeOf(pb)) : 1;
+    ctx.strokeStyle = o.handColor || "#ff9f43";
+    ctx.lineWidth = o.handWidthPx || 3;
+    ctx.beginPath();
+    ctx.moveTo(A.x, A.y);
+    ctx.lineTo(B.x, B.y);
+    ctx.stroke();
+  });
+  ctx.fillStyle = o.handJointColor || "#ff9f43";
+  landmarks.forEach((p) => {
+    if (!finitePoint(p)) return;
+    const P = px(p);
+    if (!finitePoint(P)) return;
+    ctx.globalAlpha = o.fadeOf ? o.fadeOf(p) : 1;
+    ctx.beginPath();
+    ctx.arc(P.x, P.y, o.handJointPx || 3, ZERO3, TAU);
     ctx.fill();
   });
   ctx.restore();

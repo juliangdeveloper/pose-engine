@@ -1,6 +1,6 @@
 import { CONNECTIONS, LANDMARK } from "./landmarks.js";
-import { PREVIEW_JOINTS } from "./features.js";
-import { jointAngles, targetJointAngles, angleWithin, drawAngleArcs, drawVelocitySkeleton, depthIndicators, drawDepthIndicators, coincidenceFromBad, drawMatchJoints, drawMatchPercent } from "./overlay.js";
+import { PREVIEW_JOINTS, HAND_BONES } from "./features.js";
+import { jointAngles, targetJointAngles, angleWithin, drawAngleArcs, drawVelocitySkeleton, drawHandSkeleton, depthIndicators, drawDepthIndicators, coincidenceFromBad, drawMatchJoints, drawMatchPercent } from "./overlay.js";
 
 export const OVERLAY_UI_DEFAULTS = Object.freeze({ style: "silhouette" });
 const JOINT_RADIUS_PX = 4;
@@ -70,6 +70,7 @@ export const OVERLAY_COLOR = Object.freeze({
   bone: "rgba(255,255,255,0.85)",
   boneLeft: "#3ddc97",
   boneRight: "#5aa9ff",
+  hand: "#ff9f43",
   joint: "#ffffff",
   guideWait: "rgba(255,255,255,0.42)",
   guideOk: "#3ddc97",
@@ -365,6 +366,15 @@ export function createPoseOverlay(options) {
     }
   }
 
+  function drawHand(hlm, px) {
+    drawHandSkeleton(ctx, hlm, px, {
+      handColor: OVERLAY_COLOR.hand,
+      handJointColor: OVERLAY_COLOR.hand,
+      handWidthPx: 3,
+      handJointPx: 3,
+    });
+  }
+
   function drawSkeleton(lm, box, px) {
     ctx.save();
     ctx.lineCap = "round";
@@ -608,20 +618,24 @@ export function createPoseOverlay(options) {
     const size = stageBox();
     ctx.clearRect(0, 0, size.w, size.h);
     const lm = frame && frame.landmarks;
-    if (!lm) return;
+    const hlm = frame && frame.handLandmarks;
+    if (!lm && !hlm) return;
     const box = fit(frame);
     const px = (p) => ({ x: box.x + (frame.mirrored ? 1 - p.x : p.x) * box.w, y: box.y + p.y * box.h });
-    const calibrating = o.isCalibrating ? o.isCalibrating() : false;
     let target = null;
-    if (calibrating) {
-      if (style === "line") drawGuideLine(frame, box, frame.mirrored);
-      else target = drawGuideSilhouette(frame, px);
-    } else if (style === "line") target = drawGhostLine(frame, box, px);
-    else target = drawGhostSilhouette(frame, box, px);
-    const detail = o.isDetail ? o.isDetail() : false;
-    if (detail) drawSkeletonDetail(frame, lm, px);
-    else drawSkeleton(lm, box, px);
-    if (detail) drawDetail(frame, px, target);
+    if (lm) {
+      const calibrating = o.isCalibrating ? o.isCalibrating() : false;
+      if (calibrating) {
+        if (style === "line") drawGuideLine(frame, box, frame.mirrored);
+        else target = drawGuideSilhouette(frame, px);
+      } else if (style === "line") target = drawGhostLine(frame, box, px);
+      else target = drawGhostSilhouette(frame, box, px);
+      const detail = o.isDetail ? o.isDetail() : false;
+      if (detail) drawSkeletonDetail(frame, lm, px);
+      else drawSkeleton(lm, box, px);
+      if (detail) drawDetail(frame, px, target);
+    }
+    if (hlm) drawHand(hlm, px);
   }
 
   function updateAlert(frame, running) {
