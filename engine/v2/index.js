@@ -15,7 +15,7 @@ import { OVERLAY_DEFAULTS, DETAIL_JOINTS, angleAt, jointAngles, targetJointAngle
 import { createKeyDispatcher, parseKeys, formatKeys, parseCombo, KEY_DEFAULTS, KEY_ACTIONS } from "./keys.js";
 import { createBackgroundRemover, createSegmenter, maskToUint8, maskStats, silhouetteColliders, drawSilhouette, BG_MODE, BG_DEFAULTS, SEGMENTER_MODEL } from "./background.js";
 
-export const ENGINE_VERSION = "0.12.0";
+export const ENGINE_VERSION = "0.12.1";
 export const SOURCE = Object.freeze({ CAMERA: "camera", VIDEO: "video" });
 export const STATUS = Object.freeze({ LOADING_MODEL: "loading-model", OPENING_CAMERA: "opening-camera", RUNNING: "running", STOPPED: "stopped" });
 export const ENGINE_ERROR = Object.freeze(Object.assign({ MODEL_FAILED: "model-failed", DETECT_FAILED: "detect-failed", NO_VIDEO: "no-video" }, CAMERA_ERROR));

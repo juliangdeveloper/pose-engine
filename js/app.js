@@ -1,8 +1,8 @@
-import { createPoseEngine, SOURCE, STATUS, FACING, LENS, CAPTURE_STATE, CAPTURE_RESULT, CALIBRATION_RESULT, PREVIEW_JOINTS, HAND_PREVIEW_COUNT, HAND_BONES, POSE_EVENT, gradeFor, normalizeSequence, validCalibration } from "../engine/v2/index.js?v=0.12.0";
-import { createPoseOverlay } from "../engine/v2/overlay-ui.js?v=0.12.0";
-import { mountCapture } from "../engine/v2/capture-ui.js?v=0.12.0";
-import { mountLibrary } from "../engine/v2/library-ui.js?v=0.12.0";
-import { mountHands } from "../engine/v2/hands-ui.js?v=0.12.0";
+import { createPoseEngine, SOURCE, STATUS, FACING, LENS, CAPTURE_STATE, CAPTURE_RESULT, CALIBRATION_RESULT, PREVIEW_JOINTS, HAND_PREVIEW_COUNT, HAND_BONES, POSE_EVENT, gradeFor, normalizeSequence, validCalibration } from "../engine/v2/index.js?v=0.12.1";
+import { createPoseOverlay } from "../engine/v2/overlay-ui.js?v=0.12.1";
+import { mountCapture } from "../engine/v2/capture-ui.js?v=0.12.1";
+import { mountLibrary } from "../engine/v2/library-ui.js?v=0.12.1";
+import { mountHands } from "../engine/v2/hands-ui.js?v=0.12.1";
 import {
   APP_ID, APP_VERSION, CAMERA_KEY, LENS_KEY, CALIBRATION_KEY, DETAIL_KEY, DETAIL_ON, DETAIL_OFF, CALIBRATION_MAX, STATS_KEY, STAT, STATS, MAX_DPR, PERCENT, COLOR, TEXT,
   NAME_MAX, DESCRIPTION_MAX,
@@ -878,7 +878,7 @@ ui.reset.addEventListener("click", () => {
 ui.posesBtn.addEventListener("click", () => libraryUI.open("poses"));
 ui.movesBtn.addEventListener("click", () => libraryUI.open("moves"));
 
-$("btn-info").addEventListener("click", () => $("info").showModal());
+$("btn-info").addEventListener("click", () => { const d = $("info"); d.showModal(); d.scrollTop = 0; const b = d.querySelector(".sheet-body"); if (b) b.scrollTop = 0; });
 $("info").addEventListener("click", (e) => { if (e.target === $("info")) $("info").close(); });
 
 window.addEventListener("pagehide", () => escritorMeta.vaciar());

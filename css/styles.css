@@ -373,7 +373,7 @@ button { font: inherit; color: inherit; }
 
 .sheet {
   width: min(92vw, 460px);
-  max-height: 86dvh;
+  max-height: 92dvh;
   padding: 0;
   border: 1px solid var(--line);
   border-radius: 18px;
@@ -382,7 +382,7 @@ button { font: inherit; color: inherit; }
 }
 
 .sheet::backdrop { background: rgba(0, 0, 0, 0.6); }
-.sheet-body { display: flex; flex-direction: column; gap: 8px; padding: 18px; }
+.sheet-body { display: flex; flex-direction: column; gap: 8px; padding: 18px; overflow-y: auto; overscroll-behavior: contain; }
 .sheet h2 { margin: 0; font-size: 19px; }
 .sheet-body p { margin: 0; font-size: 14px; line-height: 1.4; }
 .tenue { color: var(--muted); font-size: 12px !important; }
@@ -400,6 +400,7 @@ button { font: inherit; color: inherit; }
 .pose-block[data-active="detected"] { border-color: var(--warn); }
 .pose-line { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; min-width: 0; }
 .pose-name { min-width: 0; font-size: 17px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--muted); }
+.pose-name:not([data-state="on"]) { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
 .pose-name[data-state="on"] { color: var(--text); }
 .pose-line-hand { min-height: 0; }
 .pose-line-hand[hidden] { display: none; }
